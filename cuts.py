@@ -308,6 +308,7 @@ class CutPartial(Routine):
 
 class SubstractHWP(Routine):
     def __init__(self, input_key, output_key, **params):
+        """This routine substracts the A(chi) signal from HWP"""
         Routine.__init__(self)
         self._input_key = input_key
         self._output_key = output_key
@@ -340,3 +341,39 @@ class SubstractHWP(Routine):
 
         # pass the tod to the data store
         store.set(self._output_key, tod)
+
+
+class TransformTOD(Routine):
+    def __init__(self, input_key, output_key, **params):
+        """This routine transforms a series of tod data transformation
+        such as downsampling, remove_mean and detrend"""
+        self._input_key = input_key
+        self._output_key = output_key
+        self._remove_mean = params.get('remove_mean', True)
+        self._remove_median = params.get('remove_mediam', False)
+        self._detrend = params.get('detrend', True)
+        self._remove_filter_gain = params.get('remove_filter_gain', False)
+        self._n_downsample = params.get('n_downsample', None)
+
+    def execute(self, store):
+        # retrieve tod
+        tod = store.get(self._input_key)
+
+        # remove mean or remove median
+        if self._remove_mean:
+            moby2.tod.remove_mean(tod)
+        elif self._remove_median:
+            moby2.tod.remove_median(tod)
+
+        # detrend
+        if self._detrend:
+            moby2.tod.detrend_tod(tod)
+
+        # remove filter gain
+        if self._remove_filter_gain:
+            moby2.tod.remove_filter_gain(tod)
+
+        # downsampling
+        if self._n_downsample is not None:
+            tod = tod.copy(resample=2**self._n_downsample, resample_offset=1)
+            self.logger.trace(0, "Downsampling done")
