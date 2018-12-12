@@ -26,7 +26,7 @@ class CutSources(Routine):
 
     def execute(self, store):
         # retrieve tod
-        tod = store.get(self._tod_key)
+        tod = store.get(self._input_key)
 
         # check if source cut results exist
         sourceResult = os.path.exists(
@@ -122,7 +122,7 @@ class CutPlanets(Routine):
         self._depot = moby2.util.Depot(self._depot_path)
 
     def execute(self, store):
-        tod = store.get(self._tod_key)
+        tod = store.get(self._input_key)
 
         # check if planetCuts exist
         planetResult = os.path.exists( self._depot.get_full_path(moby2.TODCuts,
@@ -188,10 +188,11 @@ class CutPlanets(Routine):
 
 
 class RemoveSyncPickup(Routine):
-    def __init__(self, tod_key, **params):
+    def __init__(self, input_key, output_key, **params):
         """This routine fit / removes synchronous pickup"""
         Routine.__init__(self)
-        self._tod_key = tod_key
+        self._input_key = input_key
+        self._output_key = output_key
         self._remove_sync = params.get('remove_sync', False)
         self._force_sync = params.get('force_sync', False)
         self._tag_sync = params.get('tag_sync', None)
@@ -202,7 +203,7 @@ class RemoveSyncPickup(Routine):
 
     def execute(self, store):
         # retrieve tod
-        tod = store.get(self._tod_key)
+        tod = store.get(self._input_key)
 
         # Check for existing results, to set what operations must be done/redone.
         sync_result = os.path.exists( self._depot.get_full_path(moby2.tod.Sync,
@@ -252,6 +253,7 @@ class CutPartial(Routine):
         self._glitchp = params.get('glitchp', {})
         self._include_mce = params.get('include_mce', True)
         self._depot_path = params.get('depot', None)        
+        self._no_noise = params.get('no_noise', True)
         
     def initialize(self):
         self._depot = moby2.util.Depot(self._depot_path)
@@ -295,7 +297,7 @@ class CutPartial(Routine):
             #                    force=True)
 
         # fill the partial cuts in our tod
-        moby2.tod.fill_cuts(tod, cuts_partial, extrapolate = False, no_noise = no_noise)
+        moby2.tod.fill_cuts(tod, cuts_partial, extrapolate = False, no_noise=self._no_noise)
 
         # save the partial cuts in tod object for further processing
         tod.cuts = cuts_partial
