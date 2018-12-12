@@ -7,6 +7,7 @@ import moby2
 from moby2.scripting import products
 from moby2.analysis import hwp
 
+
 class CutSources(Routine):
     def __init__(self, input_key, output_key, **params):
         """A routine that cuts the point sources"""
@@ -103,7 +104,6 @@ class CutSources(Routine):
 
         # pass the processed tod back to data store
         store.set(self._output_key, tod)
-
 
 
 class CutPlanets(Routine):
