@@ -133,7 +133,7 @@ class CutPlanets(Routine):
 
         # if planetCuts do not exist generate it on the run
         else:
-            logger.trace(0, "Finding new planet cuts")
+            self.logger.trace(0, "Finding new planet cuts")
             if not hasattr(tod, 'fplane'):
                 tod.fplane = products.get_focal_plane(self._pointing_par,
                                                       tod.info)
@@ -172,9 +172,10 @@ class CutPlanets(Routine):
                 # merge it into the total cut
                 pos_cuts_planets.merge_tod_cuts(planet_cut)
 
-            # write planet cut to depot, copied from moby2, not needed here
-            # depot.write_object(pos_cuts_planets, tag=params.get('tag_planet'),
-            #                    force=True, tod=tod, make_dirs=True)
+            # write planet cut to depot, copied from moby2, not needed
+            # here depot.write_object(pos_cuts_planets,
+            # tag=params.get('tag_planet'), force=True, tod=tod,
+            # make_dirs=True)
 
         # fill planet cuts into tod
         moby2.tod.fill_cuts(tod, pos_cuts_planets, no_noise=self._no_noise)
@@ -201,7 +202,8 @@ class RemoveSyncPickup(Routine):
         # retrieve tod
         tod = store.get(self._input_key)
 
-        # Check for existing results, to set what operations must be done/redone.
+        # Check for existing results, to set what operations must be
+        # done/redone.
         sync_result = os.path.exists(
             self._depot.get_full_path(
                 moby2.tod.Sync, tag=self._tag_sync, tod=tod))
@@ -260,7 +262,8 @@ class CutPartial(Routine):
 
         # check if partial results already exist
         partial_result = os.path.exists(
-            depot.get_full_path(moby2.TODCuts, tag=self._tag_partial, tod=tod))
+            self._depot.get_full_path(moby2.TODCuts,
+                                      tag=self._tag_partial, tod=tod))
         # check if we need to skip creating partial cuts
         skip_partial = self._skip_sync and not self._force_partial and partial_result
 
@@ -286,9 +289,9 @@ class CutPartial(Routine):
             cuts_partial.merge_tod_cuts(mce_cuts)
 
             # write to depot, not needed here
-            # depot.write_object(cuts_partial, tag=params.get('tag_partial'), tod=tod,
-            #                    make_dirs = True,
-            #                    force=True)
+            # depot.write_object(cuts_partial,
+            # tag=params.get('tag_partial'), tod=tod, make_dirs =
+            # True, force=True)
 
         # fill the partial cuts in our tod
         moby2.tod.fill_cuts(
@@ -388,8 +391,8 @@ class AnalyzeScan(Routine):
 
         # analyze scan and save result into a dictionary
         scan = self.analyze_scan(
-            np.unwrap(self.tod.az), self.sampleTime,
-            **self.params.get("scanParams", {}))
+            np.unwrap(tod.az), self.sampleTime,
+            **self._scanParams)
 
         # get scan frequency
         scan_freq = scan["scan_freq"]
@@ -501,6 +504,7 @@ class AnalyzeScan(Routine):
 
         c_vect = moby2.tod.cuts.CutsVector.from_mask(flag).get_buffered(100)
 
+        # return scan parameters
         scan = {
             "az_max": az_max,
             "az_min": az_min,
@@ -512,3 +516,84 @@ class AnalyzeScan(Routine):
             "N": N_scan
         }
         return scan
+
+
+class AnalyzeTemperature(Routine):
+    def __init__(self, input_key, thermal_params):
+        """This routine will analyze the temperature of the TOD"""
+        Routine.__init__(self)
+        self._input_key = input_key
+        self._thermal_params = thermal_params
+
+    def execute(self, store):
+        tod = store.get(self._input_key)
+        self.Temp, self.dTemp, self.temperatureCut = self.checkThermalDrift(tod, self._thermal_params)
+
+    def checkThermalDrift(self, tod, thermal_params):
+        """
+        @brief Measure the mean temperature and thermal drift, and
+               suggest a thermalCut
+        @return mean temperature, thermal drift and thermal cut flag
+        """
+        Temp = None
+        dTemp = None
+        temperatureCut = False
+        channels = thermal_params.get("channel",None)
+        T_max = thermal_params.get('T_max',None)
+        dT_max = thermal_params.get('dT_max',None)
+        if channels is None or T_max is None or dT_max is None:
+            return Temp, dTemp, temperatureCut
+        thermometers = []
+        for ch in channels:
+            thermometer = tod.get_hk( ch, fix_gaps=True)
+            if len(np.diff(thermometer).nonzero()[0]) > 0:
+                thermometers.append(thermometer)
+        if len(thermometers) > 0:
+            thermometers = numpy.array(thermometers)
+            # Get thermometer statistics
+            th_mean = moby2.tod.remove_mean(data=thermometers)
+            th_trend = moby2.tod.detrend_tod(data=thermometers)
+            Temp = th_mean[0]
+            dTemp = th_trend[1][0] - th_trend[0][0]
+            if (Temp > T_max) or (abs(dTemp) > dT_max):
+                temperatureCut = True
+        return Temp, dTemp, temperatureCut
+
+    
+class FindZeroDetectors(Routine):
+    def __init__(self, input_key):
+        Routine.__init__(self)
+        self._input_key = input_key
+
+    def execute(self, store):
+        tod = store.get(self._input_key)
+        zeroSel = ~tod.data[:,::100].any(axis=1)
+
+        store.set("zeroSel", zeroSel)
+
+
+class GetCandidate(Routine):
+    def __init__(self, input_key, fullRMSlim):
+        Routine.__init__(self)
+        self._input_key = input_key
+        self._fullRMSlim = fullRMSlim
+
+    def execute(self, store):
+        tod = store.get(self._input_key)
+
+        fullRMSsel = np.std(tod.data, axis=1) < self._fullRMSlim
+        live = self.liveCandidates * ~self.zeroSel * fullRMSsel
+        dark = self.origDark * ~self.zeroSel * fullRMSsel
+
+        tic = time.time(); psLib.trace('moby', 2, "Calibrating")
+        self.calibrate2pW()
+        resp = self.calData["resp"]; ff = self.calData["ff"]
+        cal = resp*ff
+        if not(numpy.any(self.calData["calSel"])): 
+            psLib.trace('moby', 0, "ERROR: no calibration for this TOD") 
+            return 1
+        toc = time.time(); 
+        psLib.trace('moby', 2, "It took %f seconds to calibrate"%(toc-tic))
+        
+
+    
