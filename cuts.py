@@ -1,5 +1,5 @@
 import os
-import np as np
+import numpy as np
 import scipy.stats.mstats as ms
 
 import moby2
@@ -9,11 +9,11 @@ from todloop import Routine
 
 
 class CutSources(Routine):
-    def __init__(self, input_key, output_key, **params):
+    def __init__(self, **params):
         """A routine that cuts the point sources"""
         Routine.__init__(self)
-        self._input_key = input_key
-        self._output_key = output_key
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
         self._tag_source = params.get('tag_source', None)
         self._source_list = params.get('source_list', None)
         self._no_noise = params.get('no_noise', True)
