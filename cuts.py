@@ -24,19 +24,21 @@ class CutSources(Routine):
 
     def initialize(self):
         self._depot = moby2.util.Depot(self._depot_path)
+        user_config = moby2.util.get_user_config()
+        moby2.pointing.set_bulletin_A(params=user_config.get('bulletin_A_settings'))
 
     def execute(self, store):
         # retrieve tod
         tod = store.get(self._input_key)
-
+        
         # check if source cut results exist
         sourceResult = os.path.exists(
             self._depot.get_full_path(
                 moby2.TODCuts, tag=self._tag_source, tod=tod))
+        
         # if cuts exist, load it now
         if sourceResult:
-            self.logger.trace(
-                0, "Loading time stream cuts (%s)" % self._tag_source)
+            self.logger.info("Loading time stream cuts (%s)" % self._tag_source)
 
             # load source cut
             source_cuts = self._depot.read_object(
@@ -47,7 +49,7 @@ class CutSources(Routine):
         # if source cut cannot be retrieved by tag_source, load it
         # through _source_list
         elif self._source_list is not None:
-            self.logger.trace(0, "Finding new source cuts")
+            self.logger.info("Finding new source cuts")
 
             # retrieve source list from the file given
             with open(self._source_list, 'r') as f:
@@ -103,10 +105,11 @@ class CutSources(Routine):
 
 
 class CutPlanets(Routine):
-    def __init__(self, input_key, output_key, **params):
+    def __init__(self, **params):
         """A routine that perform the planet cuts"""
-        self._input_key = input_key
-        self._output_key = output_key
+        Routine.__init__(self)        
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
         self._no_noise = params.get('no_noise', True)
         self._tag_planet = params.get('tag_planet', None)
         self._pointing_par = params.get('pointing_par', None)
@@ -116,7 +119,7 @@ class CutPlanets(Routine):
 
     def initialize(self):
         self._depot = moby2.util.Depot(self._depot_path)
-
+        
     def execute(self, store):
         tod = store.get(self._input_key)
 
@@ -124,20 +127,20 @@ class CutPlanets(Routine):
         planetResult = os.path.exists(
             self._depot.get_full_path(
                 moby2.TODCuts, tag=self._tag_planet, tod=tod))
+        
+
         # if planetCuts exist load it into variable pos_cuts_planets
         if planetResult:
-            self.logger.trace(
-                0, "Loading time stream cuts (%s)" % self._tag_planet)
+            self.logger.info("Loading time stream cuts (%s)" % self._tag_planet)
             pos_cuts_planets = self._depot.read_object(
                 moby2.TODCuts, tag=self._tag_planet, tod=tod)
 
         # if planetCuts do not exist generate it on the run
         else:
-            self.logger.trace(0, "Finding new planet cuts")
+            self.logger.info("Finding new planet cuts")
             if not hasattr(tod, 'fplane'):
                 tod.fplane = products.get_focal_plane(self._pointing_par,
                                                       tod.info)
-
             # load planet sources
             matched_sources = moby2.ephem.get_sources_in_patch(
                 tod=tod, source_list=None)
@@ -185,11 +188,11 @@ class CutPlanets(Routine):
 
 
 class RemoveSyncPickup(Routine):
-    def __init__(self, input_key, output_key, **params):
+    def __init__(self, **params):
         """This routine fit / removes synchronous pickup"""
         Routine.__init__(self)
-        self._input_key = input_key
-        self._output_key = output_key
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
         self._remove_sync = params.get('remove_sync', False)
         self._force_sync = params.get('force_sync', False)
         self._tag_sync = params.get('tag_sync', None)
@@ -215,39 +218,39 @@ class RemoveSyncPickup(Routine):
         # obtain scan frequency
         scan_freq = moby2.tod.get_scan_info(tod).scan_freq
 
-        self.logger.trace(0, "Removing Sync")
+        if (self._remove_sync) and (scan_freq != 0):
+            self.logger.info("Removing Sync")
+            # check if sync can be skipped
+            if skip_sync:
+                self.logger.info("Using old sync")
+                ss = self._depot.read_object(
+                    moby2.tod.Sync, tag=self._tag_sync, tod=tod)
+            # if not generate it on the go
+            else:
+                self.logger.info("Computing new sync")
+                ss = moby2.tod.Sync(tod)
+                ss.findOutliers()
+                ss = ss.extend()
 
-        # check if sync can be skipped
-        if skip_sync:
-            self.logger.trace(2, "Using old sync")
-            ss = self._depot.read_object(
-                moby2.tod.Sync, tag=self._tag_sync, tod=tod)
-        # if not generate it on the go
-        else:
-            self.logger.trace(2, "Computing new sync")
-            ss = moby2.tod.Sync(tod)
-            ss.findOutliers()
-            ss = ss.extend()
+                # write sync object to disk
+                # depot.write_object(ss, tag=self._tag_sync, tod=tod, make_dirs=True,
+                #                    force=True)
 
-            # write sync object to disk
-            # depot.write_object(ss, tag=self._tag_sync, tod=tod, make_dirs=True,
-            #                    force=True)
-
-        ss.removeAll()
-        del ss
+            ss.removeAll()
+            del ss
 
         # pass the processed tod back to data store
         store.set(self._output_key, tod)
 
 
 class CutPartial(Routine):
-    def __init__(self, input_key, output_key, **params):
+    def __init__(self, **params):
         """A routine that performs the partial cuts"""
-        self._input_key = input_key
-        self._output_key = output_key
+        Routine.__init__(self)        
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
         self._tag_partial = params.get('tag_partial', None)
         self._force_partial = params.get('force_partial', False)
-        self._skip_sync = params.get('skip_sync', False)
         self._glitchp = params.get('glitchp', {})
         self._include_mce = params.get('include_mce', True)
         self._depot_path = params.get('depot', None)
@@ -265,11 +268,12 @@ class CutPartial(Routine):
             self._depot.get_full_path(moby2.TODCuts,
                                       tag=self._tag_partial, tod=tod))
         # check if we need to skip creating partial cuts
-        skip_partial = self._skip_sync and not self._force_partial and partial_result
+        skip_partial = not self._force_partial and partial_result
 
         # if we want to skip creating partial cuts, load from depot
         if skip_partial:
             # Read existing result
+            self.logger.info("Loading time stream cuts (%s)" % self._tag_partial)            
             cuts_partial = self._depot.read_object(
                 moby2.TODCuts, tag=self._tag_partial, tod=tod)
         # otherwise generate partial cuts now
@@ -308,8 +312,8 @@ class SubstractHWP(Routine):
     def __init__(self, input_key, output_key, **params):
         """This routine substracts the A(chi) signal from HWP"""
         Routine.__init__(self)
-        self._input_key = input_key
-        self._output_key = output_key
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
         self._hwp_par = params.get('hwp_par')
         self._depot_path = params.get('depot', None)
 
@@ -320,7 +324,7 @@ class SubstractHWP(Routine):
         # retrieve tod
         tod = store.get(self._input_key)
 
-        self.logger.trace(0, "Substract HWP signal")
+        self.logger.info("Substract HWP signal")
 
         # retrieve hwp_modes object from depot
         hwp_modes = self._depot.read_object(
@@ -343,11 +347,11 @@ class SubstractHWP(Routine):
 
 
 class TransformTOD(Routine):
-    def __init__(self, input_key, output_key, **params):
+    def __init__(self, **params):
         """This routine transforms a series of tod data transformation
         such as downsampling, remove_mean and detrend"""
-        self._input_key = input_key
-        self._output_key = output_key
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
         self._remove_mean = params.get('remove_mean', True)
         self._remove_median = params.get('remove_mediam', False)
         self._detrend = params.get('detrend', True)
@@ -375,7 +379,9 @@ class TransformTOD(Routine):
         # downsampling
         if self._n_downsample is not None:
             tod = tod.copy(resample=2**self._n_downsample, resample_offset=1)
-            self.logger.trace(0, "Downsampling done")
+            self.logger.info("Downsampling done")
+
+        store.set(self._output_key, tod)
 
 
 class AnalyzeScan(Routine):
@@ -405,7 +411,6 @@ class AnalyzeScan(Routine):
             'pivot': scan["pivot"] * ds,
             'N': scan["N"]
         }
-
         store.set("chunkParams", chunkParams)
 
     def analyze_scan(self, az, dt=0.002508, N=50, vlim=0.01, qlim=0.01):
