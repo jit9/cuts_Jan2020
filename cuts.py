@@ -576,55 +576,138 @@ class AnalyzeTemperature(Routine):
         self.logger.info(thermal_results)
         store.set(self._output_key, thermal_results)
 
-    
-class FindZeroDetectors(Routine):
-    def __init__(self, **params):
-        Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
-        self._downsample = params.get('downsample', 100)
 
-    def execute(self, store):
-        tod = store.get(self._input_key)
-        zeroSel = ~tod.data[:,::self._downsample].any(axis=1)
-
-        store.set(self._output_key, zeroSel)
-
-
-class GetCandidate(Routine):
+class GetDetectors(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
         self._input_key = params.get('input_key', None)
         self._output_key = params.get('output_key', None)
         self._fullRMSlim = params.get('fullRMSlim', 1e8)
+        self._source = params.get('source', None)
+        self._filename = params.get('filename', None)
+        self._live = params.get('live', None)
+        self._dark = params.get('dark', None)
+        self._exclude = params.get('exclude', None)
+        self._noExclude = params.get('noExclude', False)
 
     def execute(self, store):
+        # get tod
         tod = store.get(self._input_key)
 
-        zeroSel = ~tod.data[:,::self._downsample].any(axis=1)
+        # get all detector lists
+        # directly copied from loic, not sure why copy is needed here
+        # i think it might be just a safety precaution
+        dets = tod.info.det_uid().copy()
 
-        fullRMSsel = np.std(tod.data, axis=1) < self._fullRMSlim
-        
-        live = self.liveCandidates * ~zeroSel * fullRMSsel
-        dark = self.origDark * ~zeroSel * fullRMSsel
+        # retrieve predefined exclude, dark live detector lists from file
+        _exclude, _dark, _live = self.get_detector_params()
 
-        good_candidates = {
+        # create mask based on the provided lists
+
+        # look at the exclude detector list
+        # if the given list is based on individual source
+        if _exclude.has_key('det_uid'):
+            exclude = tod.info.array_data.select_inner({
+                'det_uid': _exclude['det_uid']
+            }, mask = True, det_uid = dets)
+            
+        # if the given list is based on matrix source
+        else:
+            exclude = tod.info.array_data.select_inner({
+                'row': exclude['rows'],
+                'col': exclude['cols']
+            }, mask = True, det_uid = dets)
+
+        # noExclude parameter specifies if we want to remove
+        # the detectors that are cutted beforehand, if it's
+        # set as false, then the existing cuts are retrieved
+        # through the get_cut method and marked as exclude
+        # on top of what's given
+        if not(self._noExclude):
+            exclude[list(tod.cuts.get_cut())] = True
+
+        # look at dark detector list
+        # if the list is based on individual source
+        if _dark.has_key('det_uid'):
+            dark_candidates = tod.info.array_data.select_inner({
+                'det_uid': _dark['det_uid']
+            }, mask = True, det_uid = dets)
+            
+        # if the list is based on matrix source
+        else:
+            dark_candidates = tod.info.array_data.select_inner({
+                'row': _dark['rows'],
+                'col': _dark['cols']
+            }, mask = True, det_uid = dets)
+
+        # look at the live detector lists
+        # if the list is based on individual source
+        if _live.has_key('det_uid'):
+            live_candidates = tod.info.array_data.select_inner({
+                'det_uid': _live['det_uid']
+            }, mask = True, det_uid = dets)
+            
+        # if the list is based on matrix source
+        else:
+            live_candidates = tod.info.array_data.select_inner({
+                'row': _live['rows'],
+                'col': _live['cols']
+            }, mask = True, det_uid = self.dets)
+    
+        # filter zero detectors
+        # mark zero detectors as 1, otherwise 0 
+        self.logger.info('Finding zero detectors')
+        zero_sel = ~tod.data[:,::100].any(axis=1)
+
+        # filter detectors with too large rms
+        # mark good detectors as 1 and bad (large rms) as 0
+        full_rms_sel = np.std(tod.data, axis=1) < self._fullRMSlim
+
+        # exclude zero detectors and noisy detectors
+        live = live_candidates * ~zero_sel * full_rms_sel
+        dark = orig_candidates * ~zero_sel * full_rms_sel
+
+        # export the detectors lists
+        detectors = {
             'live': live,
             'dark': dark
         }
-        store.set(self._output_key, good_candidates)
+        self.logger.info(detectors)
+        store.set(self._output_key, detectors)
 
+    def get_detector_params(self):
+        source = self._source
 
-class Calibrate
-        tic = time.time(); psLib.trace('moby', 2, "Calibrating")
-        self.calibrate2pW()
-        resp = self.calData["resp"]; ff = self.calData["ff"]
-        cal = resp*ff
-        if not(numpy.any(self.calData["calSel"])): 
-            psLib.trace('moby', 0, "ERROR: no calibration for this TOD") 
-            return 1
-        toc = time.time(); 
-        psLib.trace('moby', 2, "It took %f seconds to calibrate"%(toc-tic))
+        # if given detector lists are specified in terms of row / col matrix
+        # so far I haven't seen it being used
+        if source == "matrix":
+            mat = np.loadtxt(self._filename, dtype = str)
+            r,c = np.where(mat == "d")  # Dark detectors
+            dark = {}.fromkeys(("rows", "cols"))
+            dark["rows"] = r; dark["cols"] = c
+            r,c = np.where(mat == "b")  # Bad detectors
+            exclude = {}.fromkeys(("rows", "cols"))
+            exclude["rows"] = r; exclude["cols"] = c
+            r, c = np.where(mat == "s")  # Stable detectors
+            r2, c2 = np.where(mat == "c")  # Candidate detectors
+            liveCandidates = {}.fromkeys(("rows", "cols"))
+            liveCandidates["rows"] = np.hstack([r,r2])
+            liveCandidates["cols"] = np.hstack([c,c2])
+
+        # if given detector lists are specified in term of lists
+        elif source == "individual":
+            # load excludable detector list
+            exclude = moby2.util.MobyDict.from_file(self._exclude))
+            
+            # load dark detector list
+            dark = moby2.util.MobyDict.from_file(self._dark)
+            
+            # load live detectors
+            liveCandidates = moby2.util.MobyDict.from_file(self._live)
+            
+        else:
+            raise "Unknown detector params source"
         
+        return exclude, dark, liveCandidates        
 
     

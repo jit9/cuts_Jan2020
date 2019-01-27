@@ -98,18 +98,16 @@ thermal_params = {
 }
 loop.add_routine(AnalyzeTemperature(**thermal_params))
 
-gc_params = {
+BASE_DIR = '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/' 
+gd_params = {
     'input_key': 'tod',
     'output_key': 'tod',
-    'fullRMSlim': 
+    'source': 'individual',
+    'live': BASE_DIR + 'live_pa3_f90_s16_c10_v4.dict',
+    'dark': BASE_DIR + 'dark.dict',
+    'exclude': BASE_DIR + 'exclude_pa3_f90_s16_c10_v4.dict'
 }
-loop.add_routine(GetCandidate(**gc_params))
-
-    'detectorLists'    : { 'source'     :                         'individual',
-        		    'live'   : '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/live_pa3_f90_s16_c10_v4.dict',
-			    'dark'   : '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/dark.dict',
-			    'exclude': '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/exclude_pa3_f90_s16_c10_v4.dict'
-			 },
+loop.add_routine(GetDetectors(**gd_params))
 
 # run pipeline
 loop.run(100,101)
