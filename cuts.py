@@ -557,7 +557,7 @@ class AnalyzeTemperature(Routine):
                 if len(np.diff(thermometer).nonzero()[0]) > 0:
                     thermometers.append(thermometer)
             if len(thermometers) > 0:
-                thermometers = numpy.array(thermometers)
+                thermometers = np.array(thermometers)
                 
                 # Get thermometer statistics
                 th_mean = moby2.tod.remove_mean(data=thermometers)
@@ -597,7 +597,7 @@ class GetDetectors(Routine):
         # get all detector lists
         # directly copied from loic, not sure why copy is needed here
         # i think it might be just a safety precaution
-        dets = tod.info.det_uid().copy()
+        dets = tod.info.det_uid.copy()
 
         # retrieve predefined exclude, dark live detector lists from file
         _exclude, _dark, _live = self.get_detector_params()
@@ -665,7 +665,7 @@ class GetDetectors(Routine):
 
         # exclude zero detectors and noisy detectors
         live = live_candidates * ~zero_sel * full_rms_sel
-        dark = orig_candidates * ~zero_sel * full_rms_sel
+        dark = dark_candidates * ~zero_sel * full_rms_sel
 
         # export the detectors lists
         detectors = {
@@ -699,7 +699,7 @@ class GetDetectors(Routine):
         # if given detector lists are specified in term of lists
         elif source == "individual":
             # load excludable detector list
-            exclude = moby2.util.MobyDict.from_file(self._exclude))
+            exclude = moby2.util.MobyDict.from_file(self._exclude)
             
             # load dark detector list
             dark = moby2.util.MobyDict.from_file(self._dark)
@@ -741,12 +741,12 @@ class CalibrateTOD(Routine):
         # get flatfield and a selection mask
         flatfield_object = moby2.detectors.RelCal.from_dict(self._flatfield)
         ffSel, ff = flatfield_object.get_property('cal',
-                                                  det_uid=tod.info.dets,
+                                                  det_uid=tod.info.det_uid,
                                                   default=1.)
         
         # get stable detectors
         _, stable = flatfield_object.get_property('stable',
-                                                  det_uid=tod.info.dets,
+                                                  det_uid=tod.info.det_uid,
                                                   default=False)
 
         # check if we want to fill default responsivity
@@ -759,7 +759,7 @@ class CalibrateTOD(Routine):
         # otherwise fill with 0
         if flatfield_object.calRMS is not None:
             _, ffRMS = flatfield_object.get_property('calRMS',
-                                                     det_uid=tod.info.dets,
+                                                     det_uid=tod.info.det_uid,
                                                      default=1.)
         else:
             ffRMS = np.zeros_like(tod.info.dets)
@@ -788,7 +788,7 @@ class CalibrateTOD(Routine):
         orig_dark = store.get(self._dets_key)['dark_candidates']
         s = ~orig_dark
         
-        if not self._calibratedTOD:
+        if not self._calibrateTOD:
             moby2.libactpol.apply_calibration(tod.data,
                                               s.nonzero()[0].astype('int32'),
                                               cal[s].astype('float32'))
@@ -796,7 +796,7 @@ class CalibrateTOD(Routine):
             calData['calibrated'] = True
             
         # report error if calibration is unsuccessful
-        if not(np.any(self.calData["calSel"])): 
+        if not(np.any(calData["calSel"])): 
             self.logger.error('moby', 0, "ERROR: no calibration for this TOD") 
             return 1
 
@@ -814,7 +814,7 @@ class FindJumps(Routine):
         self._window = params.get('window', None)
 
     def execute(self, store):
-        tod = store.get(self.__input_key)
+        tod = store.get(self._input_key)
 
         # find jumps
         jumps = moby2.libactpol.find_jumps(tod.data,
