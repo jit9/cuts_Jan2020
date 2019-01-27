@@ -669,8 +669,10 @@ class GetDetectors(Routine):
 
         # export the detectors lists
         detectors = {
-            'live': live,
-            'dark': dark
+            'live_candidates': live_candidates,
+            'dark_candidates': dark_candidates,
+            'live_final': live,
+            'dark_final': dark
         }
         self.logger.info(detectors)
         store.set(self._output_key, detectors)
@@ -710,4 +712,95 @@ class GetDetectors(Routine):
         
         return exclude, dark, liveCandidates        
 
-    
+
+class CalibrateTOD(Routine):
+    def __init__(self, **params):
+        Routine.__init__(self)
+        self._input_key = params.get('input_key', None)
+        self._dets_key = params.get('dets_key', None)
+        self._output_key = params.get('output_key', None)
+        self._output_calData = params.get('output_calData', "calData")
+        self._flatfield = params.get('flatfield', None)
+        self._forceNoResp = params.get('forceNoResp', None)
+        self._config = params.get('config', None)
+        self._calibrateTOD = params.get('calibrateTOD', True)
+
+    def execute(self, store):
+        tod = store.get(self._input_key)
+
+        #####################################################
+        # get responsivities and flatfield for calibration  #
+        #####################################################
+        
+        # get responsivity
+        resp = products.get_calibration(self._config, tod.info)
+
+        # select only responsive detectors
+        respSel = (resp.cal != 0.0)
+        
+        # get flatfield and a selection mask
+        flatfield_object = moby2.detectors.RelCal.from_dict(self._flatfield)
+        ffSel, ff = flatfield_object.get_property('cal',
+                                                  det_uid=tod.info.dets,
+                                                  default=1.)
+        
+        # get stable detectors
+        _, stable = flatfield_object.get_property('stable',
+                                                  det_uid=tod.info.dets,
+                                                  default=False)
+
+        # check if we want to fill default responsivity
+        if self._forceNoResp:
+            # fill the default with median of stable detectors
+            rm = np.median(resp.cal[stable*respSel])
+            resp.cal[~respSel] = rm
+
+        # get the RMS for flatfield calibration if it exists
+        # otherwise fill with 0
+        if flatfield_object.calRMS is not None:
+            _, ffRMS = flatfield_object.get_property('calRMS',
+                                                     det_uid=tod.info.dets,
+                                                     default=1.)
+        else:
+            ffRMS = np.zeros_like(tod.info.dets)
+
+        # summarize all the calibration data into a dictionary 
+        calData = {
+            "resp": resp.cal,
+            "respSel": respSel,            
+            "ff": ff,
+            "ffRMS": ffRMS,
+            "ffSel": ffSel,
+            "stable": stable,
+            "cal": resp.cal*ff,
+            "calSel": ffSel*respSel,
+            "calibrated": False
+        }
+
+        
+        ########################################################
+        # calibrate TOD to pW using responsivity and flatfield #
+        ########################################################
+        
+        cal = calData['cal']
+        
+        # apply to all except for original dark detectors        
+        orig_dark = store.get(self._dets_key)['dark_candidates']
+        s = ~orig_dark
+        
+        if not self._calibratedTOD:
+            moby2.libactpol.apply_calibration(tod.data,
+                                              s.nonzero()[0].astype('int32'),
+                                              cal[s].astype('float32'))
+            # mark tod as calibrated
+            calData['calibrated'] = True
+            
+        # report error if calibration is unsuccessful
+        if not(np.any(self.calData["calSel"])): 
+            self.logger.error('moby', 0, "ERROR: no calibration for this TOD") 
+            return 1
+
+        # save to data store
+        store.set(self._output_calData, calData)
+        store.set(self._output_key, tod)
+

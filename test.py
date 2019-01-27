@@ -101,13 +101,35 @@ loop.add_routine(AnalyzeTemperature(**thermal_params))
 BASE_DIR = '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/' 
 gd_params = {
     'input_key': 'tod',
-    'output_key': 'tod',
+    'output_key': 'dets',
     'source': 'individual',
     'live': BASE_DIR + 'live_pa3_f90_s16_c10_v4.dict',
     'dark': BASE_DIR + 'dark.dict',
     'exclude': BASE_DIR + 'exclude_pa3_f90_s16_c10_v4.dict'
 }
 loop.add_routine(GetDetectors(**gd_params))
+
+cal_params = {
+    'input_key': 'tod',
+    'dets_key': 'dets',
+    'output_key': 'tod',
+    'output_calData': 'calData',
+    'flatfield': "/data/actpol/actpol_data_shared/FlatFields/2015/" + \
+                 "ff_actpol3_2015_c9_w1_v2b_mix90-150_it9_actpol3_2015_c9_w2_photon_mix90-150_it7.dict",
+    'config': [{
+        "type": "depot_cal",
+        "depot": "/data/actpol/depot",
+        "tag": "pa3_s16_BS",
+        "name": "biasstep"
+    }, {
+        "type": "constant",
+        "value": 0.821018,
+        "name": "DC bias factor"
+    }],
+    'forceNoResp': True,
+    'calibrateTOD': True,
+}
+loop.add_routine(CalibrateTOD(**cal_params))
 
 # run pipeline
 loop.run(100,101)
