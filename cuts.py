@@ -804,3 +804,28 @@ class CalibrateTOD(Routine):
         store.set(self._output_calData, calData)
         store.set(self._output_key, tod)
 
+        
+class FindJumps(Routine):
+    def __init__(self, **params):
+        Routine.__init__(self)
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._dsStep = params.get('dsStep', None)
+        self._window = params.get('window', None)
+
+    def execute(self, store):
+        tod = store.get(self.__input_key)
+
+        # find jumps
+        jumps = moby2.libactpol.find_jumps(tod.data,
+                                           self._dsStep,
+                                           self._window)
+        # store the jumps values
+        crit = {
+            'jumpLive': {'values': jumps },
+            'jumpDark': {'values': jumps }
+        }
+        
+        # save to data store
+        store.set(self._output_key, crit)
+    

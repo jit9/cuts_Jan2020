@@ -131,5 +131,13 @@ cal_params = {
 }
 loop.add_routine(CalibrateTOD(**cal_params))
 
+jump_params = {
+    'input_key': 'tod',
+    'output_key': 'crit_jumps',
+    'dsStep': 4,
+    'window': 1,
+}
+loop.add_routine(FindJumps(**jump_params))
+
 # run pipeline
 loop.run(100,101)
