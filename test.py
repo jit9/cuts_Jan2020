@@ -86,11 +86,30 @@ loop.add_routine(TransformTOD(**transform_params))
 scan_params = {
     'input_key': 'tod',
     'output_key': 'chunk_params',
-    'scan_param': {}
 }
 loop.add_routine(AnalyzeScan(**scan_params))
 
+thermal_params = {
+    'input_key': 'tod',
+    'output_key': 'thermal_results',
+    'channel': None,
+    'T_max': 0.10,
+    'dT_max': 0.0015, 
+}
+loop.add_routine(AnalyzeTemperature(**thermal_params))
+
+gc_params = {
+    'input_key': 'tod',
+    'output_key': 'tod',
+    'fullRMSlim': 
+}
+loop.add_routine(GetCandidate(**gc_params))
+
+    'detectorLists'    : { 'source'     :                         'individual',
+        		    'live'   : '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/live_pa3_f90_s16_c10_v4.dict',
+			    'dark'   : '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/dark.dict',
+			    'exclude': '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/exclude_pa3_f90_s16_c10_v4.dict'
+			 },
+
 # run pipeline
 loop.run(100,101)
-    
-

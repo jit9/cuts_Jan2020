@@ -390,29 +390,31 @@ class AnalyzeScan(Routine):
         Routine.__init__(self)
         self._input_key = params.get('input_key', None)
         self._output_key = params.get('output_key', None)
-        self._scanParams = params.get('scan_param', None)
+        self._scan_params = params.get('scan_param', {})
 
     def execute(self, store):
         # load tod
         tod = store.get(self._input_key)
 
+        sample_time = (tod.ctime[-1] - tod.ctime[0]) / (tod.ctime.shape[0]-1)
         # analyze scan and save result into a dictionary
         scan = self.analyze_scan(
-            np.unwrap(tod.az), self.sampleTime,
-            **self._scanParams)
+            np.unwrap(tod.az), sample_time,
+            **self._scan_params)
 
         # get scan frequency
         scan_freq = scan["scan_freq"]
 
         # get downsample level
-        ds = self.tod.info.downsample_level,
+        ds = tod.info.downsample_level
 
-        chunkParams = {
+        chunk_params = {
             'T': scan["T"] * ds,
             'pivot': scan["pivot"] * ds,
             'N': scan["N"]
         }
-        store.set("chunkParams", chunkParams)
+        self.logger.info(chunk_params)
+        store.set(self._output_key, chunk_params)
 
     def analyze_scan(self, az, dt=0.002508, N=50, vlim=0.01, qlim=0.01):
         """Find scan parameters and cuts"""
@@ -525,72 +527,95 @@ class AnalyzeScan(Routine):
 
 
 class AnalyzeTemperature(Routine):
-    def __init__(self, input_key, thermal_params):
+    def __init__(self, **params):
         """This routine will analyze the temperature of the TOD"""
         Routine.__init__(self)
-        self._input_key = input_key
-        self._thermal_params = thermal_params
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._channel = params.get('channel', None)
+        self._T_max = params.get('T_max', False)
+        self._dT_max = params.get('dT_max', None)
 
     def execute(self, store):
-        tod = store.get(self._input_key)
-        self.Temp, self.dTemp, self.temperatureCut = self.checkThermalDrift(tod, self._thermal_params)
-
-    def checkThermalDrift(self, tod, thermal_params):
         """
         @brief Measure the mean temperature and thermal drift, and
                suggest a thermalCut
         @return mean temperature, thermal drift and thermal cut flag
         """
+        tod = store.get(self._input_key)
+
         Temp = None
         dTemp = None
         temperatureCut = False
-        channels = thermal_params.get("channel",None)
-        T_max = thermal_params.get('T_max',None)
-        dT_max = thermal_params.get('dT_max',None)
-        if channels is None or T_max is None or dT_max is None:
-            return Temp, dTemp, temperatureCut
-        thermometers = []
-        for ch in channels:
-            thermometer = tod.get_hk( ch, fix_gaps=True)
-            if len(np.diff(thermometer).nonzero()[0]) > 0:
-                thermometers.append(thermometer)
-        if len(thermometers) > 0:
-            thermometers = numpy.array(thermometers)
-            # Get thermometer statistics
-            th_mean = moby2.tod.remove_mean(data=thermometers)
-            th_trend = moby2.tod.detrend_tod(data=thermometers)
-            Temp = th_mean[0]
-            dTemp = th_trend[1][0] - th_trend[0][0]
-            if (Temp > T_max) or (abs(dTemp) > dT_max):
-                temperatureCut = True
-        return Temp, dTemp, temperatureCut
+        
+        if self._channel is None or self._T_max is None or self._dT_max is None:
+            pass
+        else:
+            thermometers = []
+            for ch in channels:
+                thermometer = tod.get_hk( ch, fix_gaps=True)
+                if len(np.diff(thermometer).nonzero()[0]) > 0:
+                    thermometers.append(thermometer)
+            if len(thermometers) > 0:
+                thermometers = numpy.array(thermometers)
+                
+                # Get thermometer statistics
+                th_mean = moby2.tod.remove_mean(data=thermometers)
+                th_trend = moby2.tod.detrend_tod(data=thermometers)
+                Temp = th_mean[0]
+                dTemp = th_trend[1][0] - th_trend[0][0]
+                if (Temp > T_max) or (abs(dTemp) > dT_max):
+                    temperatureCut = True        
+
+        thermal_results = {
+            'Temp': Temp,
+            'dTemp': dTemp,
+            'temperatureCut': temperatureCut
+        }
+        
+        self.logger.info(thermal_results)
+        store.set(self._output_key, thermal_results)
 
     
 class FindZeroDetectors(Routine):
-    def __init__(self, input_key):
+    def __init__(self, **params):
         Routine.__init__(self)
-        self._input_key = input_key
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._downsample = params.get('downsample', 100)
 
     def execute(self, store):
         tod = store.get(self._input_key)
-        zeroSel = ~tod.data[:,::100].any(axis=1)
+        zeroSel = ~tod.data[:,::self._downsample].any(axis=1)
 
-        store.set("zeroSel", zeroSel)
+        store.set(self._output_key, zeroSel)
 
 
 class GetCandidate(Routine):
-    def __init__(self, input_key, fullRMSlim):
+    def __init__(self, **params):
         Routine.__init__(self)
-        self._input_key = input_key
-        self._fullRMSlim = fullRMSlim
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._fullRMSlim = params.get('fullRMSlim', 1e8)
 
     def execute(self, store):
         tod = store.get(self._input_key)
 
-        fullRMSsel = np.std(tod.data, axis=1) < self._fullRMSlim
-        live = self.liveCandidates * ~self.zeroSel * fullRMSsel
-        dark = self.origDark * ~self.zeroSel * fullRMSsel
+        zeroSel = ~tod.data[:,::self._downsample].any(axis=1)
 
+        fullRMSsel = np.std(tod.data, axis=1) < self._fullRMSlim
+        
+        live = self.liveCandidates * ~zeroSel * fullRMSsel
+        dark = self.origDark * ~zeroSel * fullRMSsel
+
+        good_candidates = {
+            'live': live,
+            'dark': dark
+        }
+        store.set(self._output_key, good_candidates)
+
+
+class Calibrate
         tic = time.time(); psLib.trace('moby', 2, "Calibrating")
         self.calibrate2pW()
         resp = self.calData["resp"]; ff = self.calData["ff"]
