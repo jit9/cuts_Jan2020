@@ -83,7 +83,12 @@ transform_params = {
 }
 loop.add_routine(TransformTOD(**transform_params))
 
-
+scan_params = {
+    'input_key': 'tod',
+    'output_key': 'chunk_params',
+    'scan_param': {}
+}
+loop.add_routine(AnalyzeScan(**scan_params))
 
 # run pipeline
 loop.run(100,101)

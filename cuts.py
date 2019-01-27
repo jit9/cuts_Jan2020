@@ -385,11 +385,12 @@ class TransformTOD(Routine):
 
 
 class AnalyzeScan(Routine):
-    def __init__(self, input_key, scanParams):
+    def __init__(self, **params):
         """This routine analyzes the scan pattern"""
         Routine.__init__(self)
-        self._input_key = input_key
-        self._scanParams = scanParams
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._scanParams = params.get('scan_param', None)
 
     def execute(self, store):
         # load tod
