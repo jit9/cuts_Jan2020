@@ -150,6 +150,7 @@ lf_dark_params = {
     'fft_data': 'fft_data',
     'dets': 'dets',
     'tod': 'tod',
+    'output_key': 'lf_dark',
     'scan': 'scan_params'
     'presel': {
         'method': 'median',
@@ -166,6 +167,8 @@ lf_dark_params = {
         'Nwin': 1,
     },
 }
-loop.add_routine(AnalyzeLF(
+loop.add_routine(AnalyzeLF(**lf_dark_params))
+
+
 # run pipeline
 loop.run(100,101)

@@ -8,7 +8,7 @@ from moby2.scripting import products
 from moby2.analysis import hwp
 from todloop import Routine
 
-from utils import nextregular
+from utils import *
 
 class CutSources(Routine):
     def __init__(self, **params):
@@ -282,7 +282,8 @@ class CutPartial(Routine):
         else:
             self.logger.info('Generating partial cuts')
 
-            # Generate and save new glitch cuts (note calbol may not be implemented...)
+            # Generate and save new glitch cuts
+            # note calbol may not be implemented...
             cuts_partial = moby2.tod.get_glitch_cuts(
                 tod=tod, params=self._glitchp)
 
@@ -876,9 +877,11 @@ class AnalyzeDarkLF(Routine):
         self._dets = params.get('dets', None)
         self._fft_data = params.get('fft_data', None)
         self._tod = params.get('tod', None)
+        self._output_key = params.get('output_key', None)
         self._scan = params.get('scan', None)
         self._freqRange = params.get('freqRange', None)
         self._forceResp = params.get('forceResp', True)
+        self._params = params
 
     def execute(self, store):
         # retrieved relevant data from data store
@@ -887,6 +890,7 @@ class AnalyzeDarkLF(Routine):
         tod = store.get(self._tod)
         scan_freq = store.get(self._scan)['scan_freq']
         df = fft_data['df']
+        
         # Note that gainLive can be defined as the factor by which to
         # multiply the common mode to fit a given detector signal.  For
         # this reason the calibration process divides each detector by
@@ -896,11 +900,11 @@ class AnalyzeDarkLF(Routine):
         # detectors.
 
         # get the frequency band parameters
-        fRange = self._freqRange
-        fmin = fRange.get("fmin", 0.017)
-        fshift = fRange.get("fshift", 0.009)
-        band = fRange.get("band", 0.070)
-        Nwin = fRange.get("Nwin", 1)
+        frange = self._freqRange
+        fmin = frange.get("fmin", 0.017)
+        fshift = frange.get("fshift", 0.009)
+        band = frange.get("band", 0.070)
+        Nwin = frange.get("Nwin", 1)
 
         if not self._forceResp:
             respSel = None
@@ -909,43 +913,55 @@ class AnalyzeDarkLF(Routine):
         corr = []
         gain = []
         norm = []
-        darkRatio = []
 
-        fcmi = None
-        
         minFreqElem = 16
+        # loop over freq windows
         for i in xrange(Nwin):
+            # find upper / lower bounds' corresponding index in freq
+            # lower bound: fmin + [ fshifts ]
+            # upper bound: fmin + band  + [ fshifts ]
             n_l = int(round((fmin + i*fshift)/df))
             n_h = int(round((fmin + i*fshift + band)/df))
 
             # if there are too few elements then add a few more
+            # to have exactly the minimum required 
             if (n_h - n_l) < minFreqElem:
                 n_h = n_l + minFreqElem
 
             # perform low frequency analysis
-            r = self.lowFreqAnal(fdata, sel, [n_l, n_h], df, nsamps, scan_freq, par.get(parTag, {}), 
-                            fcmodes=fcmi, respSel=respSel, flatfield=flatfield)
+            r = self.lowFreqAnal(fdata, sel, [n_l, n_h], df, tod.nsamps, scan_freq)
 
             # append the results to the relevant lists
             psel.append(r["preSel"])
             corr.append(r["corr"])
             gain.append(np.abs(r["gain"]))
             norm.append(r["norm"])
-            darkRatio.append(r["ratio"])
 
-        # count total 
-        total_psel = np.sum(psel, axis=0)
-        Nmax = total_psel.max()
-        psel50 = total_psel >= Nmax/2.
+        # count pre-selected
+        psel = np.sum(psel, axis=0)
+        Nmax = psel.max()
+
+        # number of pre-selected above median mask this marks a good
+        # selection of detectors
+        psel50 = psel >= Nmax/2.
+
+        # Normalize gain by the average gain of a good selection of
+        # detectors, here this selection is given by psel50 AND presel
         for g, s in zip(gain, psel):
             g /= np.mean(g[psel50*s])
         gain = np.array(gain)
+        # give a default gain of 0 for invalid data
         gain[np.isnan(gain)] = 0.
+
+        # use mean as representative values for gain
         mgain = ma.MaskedArray(gain, ~np.array(psel))
         mgain_mean = mgain.mean(axis=0)
-        mcorr = ma.MaskedArray(corr, ~np.array(psel))
 
+        # use max as representative values for corra
+        mcorr = ma.MaskedArray(corr, ~np.array(psel))
         mcorr_max = mcorr.max(axis=0)
+
+        # use mean as representative values for norm
         mnorm = ma.MaskedArray(norm, ~np.array(psel))
         mnorm_mean = mnorm.mean(axis=0)
         
@@ -957,77 +973,66 @@ class AnalyzeDarkLF(Routine):
         }
         
         preDarkSel = res["preSel"]
-        crit_lf_dark = {}
-        crit["corrDark"] = {
-            "values": res["corr"]
-        }
-        crit["gainDark"]["values"] = res["gain"]
-        crit["normDark"]["values"] = res["norm"]
-        darkSel = self.preDarkSel.copy()
 
+        # export the values
+        results = {}
         
-    def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq, par, 
-                    fcmodes=None, respSel = None, flatfield = None):
+        results["corrDark"] = {
+            "values": mcorr_max.data,
+        }
+        results["gainDark"] = {
+            "values": mgain_mean.data
+        }
+        results["normDark"] = {
+            "values": mnorm_mean.data
+        }
+        results["darkSel"] = preDarkSel.copy()  # not sure why copy is
+                                                # needed
+        store.set(self._output_key, results)
+        
+    def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq):
         """
-        @brief Find correlations and gains to the main common mode over a frequency range
+        Find correlations and gains to the main common mode over a frequency range
         """
-        lf_data = fdata[sel,frange[0]:frange[1]].copy()
+        lf_data = fdata[sel,frange[0]:frange[1]]
         ndet = len(sel)
         dcoeff = None
         ratio = None
         res = {}
 
         # Apply sine^2 taper to data
-        if par.get("useTaper",False):
+        if self._params.get("useTaper",False):
             taper = get_sine2_taper(frange, edge_factor = 6)
             lf_data *= np.repeat([taper],len(lf_data),axis=0)
         else:
             taper = np.ones(frange[1]-frange[0])
 
-        # Deproject correlated modes
-        if fcmodes is not None:
-            data_norm = np.linalg.norm(lf_data,axis=1)
-            dark_coeff = []
-
-            for m in fcmodes:
-                coeff = numpy.dot(lf_data.conj(),m)
-                lf_data -= numpy.outer(coeff.conj(),m)
-                dark_coeff.append(coeff)
-
-            # Reformat dark coefficients
-            if len(dark_coeff) > 0:
-                dcoeff = numpy.zeros([len(dark_coeff),ndet],dtype=complex)
-                dcoeff[:,sel] = np.array(dark_coeff)
-
-            # Get Ratio
-            ratio = numpy.zeros(ndet,dtype=float)
-            data_norm[data_norm==0.] = 1.
-            ratio[sel] = np.linalg.norm(lf_data,axis=1)/data_norm
-
         # Scan frequency rejection
-        if par.get("cancelSync",False) and (scan_freq/df > 7):
-            i_harm = get_iharm(frange, df, scan_freq, wide = par.get("wide",True))
-            lf_data[:,i_harm] = 0.0
+        if self._params.get("cancelSync",False) and (scan_freq/df > 7):
+            i_harm = get_iharm(frange, df, scan_freq,
+                               wide=self._param.get("wide",True))
+            lf_data[:, i_harm] = 0.0
 
         # Get correlation matrix
-        c = numpy.dot(lf_data,lf_data.T.conjugate())
-        a = numpy.linalg.norm(lf_data,axis=1)
-        aa = numpy.outer(a,a)
+        c = np.dot(lf_data, lf_data.T.conjugate())
+        a = np.linalg.norm(lf_data, axis=1)
+        aa = np.outer(a,a)
         aa[aa==0.] = 1.
         cc = c/aa
 
         # Get Norm
-        ppar = par.get("presel",{})
+        ppar = self._params.get("presel",{})
         norm = numpy.zeros(ndet,dtype=float)
         fnorm = np.sqrt(np.abs(np.diag(c)))
         norm[sel] = fnorm*np.sqrt(2./nsamps)
         nnorm = norm/np.sqrt(nsamps)
+        
         nlim = ppar.get("normLimit",[0.,1e15])
         if np.ndim(nlim) == 0: nlim = [0,nlim]
         normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
 
         # Check if norms are divided in 2 groups. Use the higher norms
-        sigs = ppar.get("sigmaSep",None)
+        sigs = ppar.get("sigmaSep", None)
         if sigs is not None:
             cent, lab = kmeans2(nnorm[normSel],2)
             frac = 0.2
@@ -1049,15 +1054,18 @@ class AnalyzeDarkLF(Routine):
                 else:
                     normSel[normSel] *= (lab==0)
 
-        # Get initial detectors
-        if respSel is None: 
-            respSel = np.ones(sel.shape,dtype=bool)
-        if par.get("presel",{}).get("method","median") is "median":
-            sl = presel_by_median(cc,sel=normSel[sel],
-                                  forceSel=respSel[sel],**par.get("presel",{}))
+        respSel = np.ones(sel.shape,dtype=bool)
+        
+        presel_params = self._params.get("presel",{})
+        presel_method = presel_param.get("method", "median")
+
+        if presel_method is "median":
+            sl = presel_by_median(cc, sel=normSel[sel],
+                                  forceSel=respSel[sel],**presel_params)
             res["groups"] = None
-        elif par.get("presel",{}).get("method") is "groups":
-            G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **par.get("presel",{}))
+            
+        elif presel_method is "groups":
+            G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **presel_params)
             sl = np.zeros(cc.shape[1],dtype=bool)
             sl[ld] = True
             res["groups"] = {"G": G, "ind": ind, "ld": ld, "smap": smap}
@@ -1067,15 +1075,9 @@ class AnalyzeDarkLF(Routine):
         preSel = sel.copy()
         preSel[sel] = sl
 
-        # Apply gain ratio in case of multichroic
-        if (flatfield is not None) and ("scale" in flatfield.fields):
-            scl = flatfield.get_property("scale",det_uid=np.where(sel)[0],
-                                                     default = 1.)
-            lf_data *= np.repeat([scl],lf_data.shape[1],axis=0).T
-
         # Get Correlations
         u, s, v = np.linalg.svd( lf_data[sl], full_matrices=False )
-        corr = numpy.zeros(ndet)
+        corr = np.zeros(ndet)
         if par.get("doubleMode",False):
             corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
         else:
@@ -1085,118 +1087,10 @@ class AnalyzeDarkLF(Routine):
         #
         # data = CM * gain
         #
-        gain = numpy.zeros(ndet,dtype=complex)
+        gain = np.zeros(ndet,dtype=complex)
         gain[preSel] = np.abs(u[:,0])  #/np.mean(np.abs(u[:,0]))
         res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
                     "dcoeff": dcoeff, "ratio": ratio, "cc": cc, "normSel": normSel})
         return res
 
 
-def presel_by_median(cc, sel = None, **kwargs):
-    """
-    minCorr: minimum correlation requiered for preselection
-    superMinCorr: minimum correlation requiered in case minCorr produces less than
-        max(<<minSel>>,numberOfDetectors/<<minFrac>> detectors
-    minSel: minimum number of detectors preselected
-    minFrac: determines the minimum number of detectors preselected by determining a 
-        fraction of the number of detectors available.
-    Note: to go back to c9 you can set:
-        superMinCorr = 0.5
-        minSel = 0
-        minFrac = 10000
-    """
-    if sel is None: sel = np.ones(cc.shape[0],dtype=bool)
-    minCorr = kwargs.get("minCorr",0.6)
-    superMinCorr = kwargs.get("superMinCorr",0.3)
-    minSel = kwargs.get("minSel",10)
-    minFrac = kwargs.get("minFrac",10)
-    sl = (numpy.median(abs(cc),axis=0) > minCorr)*sel
-    if kwargs.get("forceSel") is not None: sl *= kwargs.get("forceSel") # NOT PRETTY
-    if sl.sum() < np.max([cc.shape[0]/minFrac,minSel]):
-        print "ERROR: did not find any valid detectors for low frequency analysis."
-        sl = (numpy.median(abs(cc),axis=0) > superMinCorr)*sel
-        if sl.sum() < minSel:
-            raise RuntimeError, "PRESELECTION FAILED, did not find any valid detectors for low frequency analysis."
-    else:
-        sl = ((abs(cc[sl]).mean(axis=0)-1./len(cc[sl]))*len(cc[sl])/(len(cc[sl])-1) > minCorr)*sel
-    return sl
-
-
-def group_detectors(cc, sel = None, **kwargs):
-    """
-    Groups detectors according to their correlation.
-    Returns:
-        G: list of lists of detectors containing the indexes of the detectors in each group
-        ind: index of the last group included in the live detector preselection
-        ld: indexes of detectors from the main correlated groups
-    Note: Indexes are provided according to the correlation matrix given
-    """
-    thr0 = kwargs.get("initCorr",0.99)
-    thr1 = kwargs.get("groupCorr",0.8)
-    thrg = kwargs.get("minCorr",0.6)
-    dthr = kwargs.get("deltaCorr", 0.005)
-    Nmin = kwargs.get("Nmin",20)
-    Gmax = kwargs.get("Gmax",5)
-
-    if sel is None: sel = np.ones(cc.shape[0],dtype=bool)
-    smap = np.where(sel)[0]
-    scc = cc[sel][:,sel]
-
-    G = []
-    g0 = []
-    allind = np.arange(scc.shape[0])
-    ss = np.zeros(scc.shape[0],dtype=bool)
-    thr = thr0
-    while ss.sum() < len(allind):
-        if np.sum(~ss) <= Nmin or len(G) >= Gmax: 
-            G.append(smap[np.where(~ss)[0]])
-            break
- 
-        ind = allind[~ss]
-        N = np.sum(~ss)
-        cco = scc[~ss][:,~ss]
- 
-        # Find reference mode
-        n0 = np.sum(np.abs(cco)>thr,axis=0)
-        imax = np.argmax(n0)
-        if n0[imax] < np.min([Nmin,N/2]):
-            thr -= dthr
-            continue
- 
-        # Find initial set of strongly correlated modes
-        gg = np.where(np.abs(cco[imax])>thr)[0]
-        s = np.argsort(cco[imax][gg])
-        g = ind[gg[s]].tolist()
- 
-        # Extend set until thr1
-        while thr > thr1:
-            thr -= dthr
-            sg = np.ones(scc.shape[0],dtype=bool)
-            sg[g] = False
-            sg[ss] = False
-            ind = np.where(sg)[0]
-  
-            if np.sum(sg) <= Nmin:
-                g0.extend(np.where(sg)[0])
-                break
-  
-            cci = scc[g][:,sg]
-            g0 = np.where(~np.any(np.abs(cci)<thr,axis=0))[0].tolist()
-            g.extend(ind[g0])
- 
-        # Append new group result
-        G.append(smap[g])
-        ss[g] = True
-        #print len(g), thr
-        thr = thr0
-
-    ind = 0
-    ld = G[ind].tolist()
-    while (ind < len(G)-1):
-        if np.mean(np.abs(cc[G[0]][:,G[ind+1]])) > thrg:
-            ind += 1
-            ld.extend(G[ind].tolist())
-        else:
-            break
-
-    return G, ind, ld, smap    
