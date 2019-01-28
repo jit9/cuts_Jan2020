@@ -85,7 +85,7 @@ loop.add_routine(TransformTOD(**transform_params))
 
 scan_params = {
     'input_key': 'tod',
-    'output_key': 'chunk_params',
+    'output_key': 'scan_params',
 }
 loop.add_routine(AnalyzeScan(**scan_params))
 
@@ -139,5 +139,33 @@ jump_params = {
 }
 loop.add_routine(FindJumps(**jump_params))
 
+fft_params = {
+    'input_key': 'tod',
+    'output_key': 'tod',
+    'fft_data': 'fft_data'
+}
+loop.add_routine(FouriorTransform(**fft_params))
+
+lf_dark_params = {
+    'fft_data': 'fft_data',
+    'dets': 'dets',
+    'tod': 'tod',
+    'scan': 'scan_params'
+    'presel': {
+        'method': 'median',
+        'minSel': 0,
+        'initCorr': 0.9,
+    },
+    'useTaper': False,
+    'cancelSync': False,
+    'doubleMode': False,
+    'freqRange' : {
+        'fmin': 0.017,
+        'fshift': 0.009,
+        'band': 0.071,
+        'Nwin': 1,
+    },
+}
+loop.add_routine(AnalyzeLF(
 # run pipeline
 loop.run(100,101)

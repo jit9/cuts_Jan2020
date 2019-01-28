@@ -1,12 +1,14 @@
 import os
 import numpy as np
 import scipy.stats.mstats as ms
+from numpy import ma
 
 import moby2
 from moby2.scripting import products
 from moby2.analysis import hwp
 from todloop import Routine
 
+from utils import nextregular
 
 class CutSources(Routine):
     def __init__(self, **params):
@@ -408,13 +410,16 @@ class AnalyzeScan(Routine):
         # get downsample level
         ds = tod.info.downsample_level
 
-        chunk_params = {
+        # summary of scan parameters
+        scan_params = {
             'T': scan["T"] * ds,
             'pivot': scan["pivot"] * ds,
-            'N': scan["N"]
+            'N': scan["N"],
+            'scan_freq': scan_freq
         }
-        self.logger.info(chunk_params)
-        store.set(self._output_key, chunk_params)
+        
+        self.logger.info(scan_params)
+        store.set(self._output_key, scan_params)
 
     def analyze_scan(self, az, dt=0.002508, N=50, vlim=0.01, qlim=0.01):
         """Find scan parameters and cuts"""
@@ -829,3 +834,259 @@ class FindJumps(Routine):
         # save to data store
         store.set(self._output_key, crit)
     
+
+class FouriorTransform(Routine):
+    def __init__(self, **params):
+        Routine.__init__(self)
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._fft_data = params.get('fft_data', None)
+        
+
+    def execute(self, store):
+        tod = store.get(self._input_key)
+
+        # first de-trend tod 
+        trend = moby2.tod.detrend_tod(tod)
+
+        # find the next regular, this is to make fft faster
+        nf = nextregular(tod.nsamps)
+        fdata = np.fft.rfft(tod.data, nf)
+
+        # time and freq units
+        dt = (tod.ctime[-1]-tod.ctime[0])/(tod.nsamps-1)
+        df = 1./(dt*nf)
+
+        # summarize fft data
+        fft_data = {
+            'trend': trend,
+            'fdata': fdata,
+            'dt': dt,
+            'df': df,
+            'nf': nf
+        }
+
+        # store data into data store
+        store.set(self._output_key, tod)
+        store.set(self._fft_data, fft_data)
+
+
+class AnalyzeDarkLF(Routine):
+    def __init__(self, **params):
+        self._dets = params.get('dets', None)
+        self._fft_data = params.get('fft_data', None)
+        self._tod = params.get('tod', None)
+        self._scan = params.get('scan', None)
+        self._freqRange = params.get('freqRange', None)
+        self._forceResp = params.get('forceResp', True)
+
+    def execute(self, store):
+        # retrieved relevant data from data store
+        fft_data = store.get(self._fft_data)
+        dets = store.get(self._dets)
+        tod = store.get(self._tod)
+        scan_freq = store.get(self._scan)['scan_freq']
+        df = fft_data['df']
+        # Note that gainLive can be defined as the factor by which to
+        # multiply the common mode to fit a given detector signal.  For
+        # this reason the calibration process divides each detector by
+        # this gain to equalize the array.  Note that stable detectors
+        # here should be the same as the calibration fiducial detectors,
+        # but in this code they are defined as the common mode stable
+        # detectors.
+
+        # get the frequency band parameters
+        fRange = self._freqRange
+        fmin = fRange.get("fmin", 0.017)
+        fshift = fRange.get("fshift", 0.009)
+        band = fRange.get("band", 0.070)
+        Nwin = fRange.get("Nwin", 1)
+
+        if not self._forceResp:
+            respSel = None
+
+        psel = []
+        corr = []
+        gain = []
+        norm = []
+        darkRatio = []
+
+        fcmi = None
+        
+        minFreqElem = 16
+        for i in xrange(Nwin):
+            n_l = int(round((fmin + i*fshift)/df))
+            n_h = int(round((fmin + i*fshift + band)/df))
+
+            # if there are too few elements then add a few more
+            if (n_h - n_l) < minFreqElem:
+                n_h = n_l + minFreqElem
+
+            # perform low frequency analysis
+            r = self.lowFreqAnal(fdata, sel, [n_l, n_h], df, nsamps, scan_freq, par.get(parTag, {}), 
+                            fcmodes=fcmi, respSel=respSel, flatfield=flatfield)
+
+            # append the results to the relevant lists
+            psel.append(r["preSel"])
+            corr.append(r["corr"])
+            gain.append(np.abs(r["gain"]))
+            norm.append(r["norm"])
+            darkRatio.append(r["ratio"])
+
+        # count total 
+        total_psel = np.sum(psel, axis=0)
+        Nmax = total_psel.max()
+        psel50 = total_psel >= Nmax/2.
+        for g, s in zip(gain, psel):
+            g /= np.mean(g[psel50*s])
+        gain = np.array(gain)
+        gain[np.isnan(gain)] = 0.
+        mgain = ma.MaskedArray(gain, ~np.array(psel))
+        mgain_mean = mgain.mean(axis=0)
+        mcorr = ma.MaskedArray(corr, ~np.array(psel))
+
+        mcorr_max = mcorr.max(axis=0)
+        mnorm = ma.MaskedArray(norm, ~np.array(psel))
+        mnorm_mean = mnorm.mean(axis=0)
+        
+        res = {
+            "preSel": psel50,
+            "corr": mcorr_max.data,
+            "gain": mgain_mean.data,
+            "norm": mnorm_mean.data,
+        }
+        
+        preDarkSel = res["preSel"]
+        crit_lf_dark = {}
+        crit["corrDark"] = {
+            "values": res["corr"]
+        }
+        crit["gainDark"]["values"] = res["gain"]
+        crit["normDark"]["values"] = res["norm"]
+        darkSel = self.preDarkSel.copy()
+
+        
+    def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq, par, 
+                    fcmodes=None, respSel = None, flatfield = None):
+        """
+        @brief Find correlations and gains to the main common mode over a frequency range
+        """
+        lf_data = fdata[sel,frange[0]:frange[1]].copy()
+        ndet = len(sel)
+        dcoeff = None
+        ratio = None
+        res = {}
+
+        # Apply sine^2 taper to data
+        if par.get("useTaper",False):
+            taper = get_sine2_taper(frange, edge_factor = 6)
+            lf_data *= np.repeat([taper],len(lf_data),axis=0)
+        else:
+            taper = np.ones(frange[1]-frange[0])
+
+        # Deproject correlated modes
+        if fcmodes is not None:
+            data_norm = np.linalg.norm(lf_data,axis=1)
+            dark_coeff = []
+
+            for m in fcmodes:
+                coeff = numpy.dot(lf_data.conj(),m)
+                lf_data -= numpy.outer(coeff.conj(),m)
+                dark_coeff.append(coeff)
+
+            # Reformat dark coefficients
+            if len(dark_coeff) > 0:
+                dcoeff = numpy.zeros([len(dark_coeff),ndet],dtype=complex)
+                dcoeff[:,sel] = np.array(dark_coeff)
+
+            # Get Ratio
+            ratio = numpy.zeros(ndet,dtype=float)
+            data_norm[data_norm==0.] = 1.
+            ratio[sel] = np.linalg.norm(lf_data,axis=1)/data_norm
+
+        # Scan frequency rejection
+        if par.get("cancelSync",False) and (scan_freq/df > 7):
+            i_harm = get_iharm(frange, df, scan_freq, wide = par.get("wide",True))
+            lf_data[:,i_harm] = 0.0
+
+        # Get correlation matrix
+        c = numpy.dot(lf_data,lf_data.T.conjugate())
+        a = numpy.linalg.norm(lf_data,axis=1)
+        aa = numpy.outer(a,a)
+        aa[aa==0.] = 1.
+        cc = c/aa
+
+        # Get Norm
+        ppar = par.get("presel",{})
+        norm = numpy.zeros(ndet,dtype=float)
+        fnorm = np.sqrt(np.abs(np.diag(c)))
+        norm[sel] = fnorm*np.sqrt(2./nsamps)
+        nnorm = norm/np.sqrt(nsamps)
+        nlim = ppar.get("normLimit",[0.,1e15])
+        if np.ndim(nlim) == 0: nlim = [0,nlim]
+        normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
+
+        # Check if norms are divided in 2 groups. Use the higher norms
+        sigs = ppar.get("sigmaSep",None)
+        if sigs is not None:
+            cent, lab = kmeans2(nnorm[normSel],2)
+            frac = 0.2
+            if lab.sum() > len(lab)*frac and lab.sum() < len(lab)*(1-frac):
+                c0 = np.sort(nnorm[normSel][lab==0])
+                c1 = np.sort(nnorm[normSel][lab==1])
+                mc0 = c0[len(c0)/2]; mc1 = c1[len(c1)/2];
+                sc0 = 0.741*(c0[(3*len(c0))/4] - c0[len(c0)/4])
+                sc1 = 0.741*(c1[(3*len(c1))/4] - c1[len(c1)/4])
+                sep =  (mc0 + sigs*sc0 - (mc1 - sigs*sc1))*np.sign(mc1-mc0)
+                if sep < 0.:
+                    if mc1 > mc0:
+                        normSel[normSel] *= (lab==1)
+                    else:
+                        normSel[normSel] *= (lab==0)
+            elif lab.sum() > 0:
+                if lab.sum() > len(lab)/2:
+                    normSel[normSel] *= (lab==1)
+                else:
+                    normSel[normSel] *= (lab==0)
+
+        # Get initial detectors
+        if respSel is None: 
+            respSel = np.ones(sel.shape,dtype=bool)
+        if par.get("presel",{}).get("method","median") is "median":
+            sl = presel_by_median(cc,sel=normSel[sel],
+                                  forceSel=respSel[sel],**par.get("presel",{}))
+            res["groups"] = None
+        elif par.get("presel",{}).get("method") is "groups":
+            G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **par.get("presel",{}))
+            sl = np.zeros(cc.shape[1],dtype=bool)
+            sl[ld] = True
+            res["groups"] = {"G": G, "ind": ind, "ld": ld, "smap": smap}
+        else:
+            raise "ERROR: Unknown preselection method"
+        #if respSel is not None: sl *= respSel[sel]
+        preSel = sel.copy()
+        preSel[sel] = sl
+
+        # Apply gain ratio in case of multichroic
+        if (flatfield is not None) and ("scale" in flatfield.fields):
+            scl = flatfield.get_property("scale",det_uid=np.where(sel)[0],
+                                                     default = 1.)
+            lf_data *= np.repeat([scl],lf_data.shape[1],axis=0).T
+
+        # Get Correlations
+        u, s, v = np.linalg.svd( lf_data[sl], full_matrices=False )
+        corr = numpy.zeros(ndet)
+        if par.get("doubleMode",False):
+            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
+        else:
+            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm[sl]
+
+        # Get Gains
+        #
+        # data = CM * gain
+        #
+        gain = numpy.zeros(ndet,dtype=complex)
+        gain[preSel] = np.abs(u[:,0])  #/np.mean(np.abs(u[:,0]))
+        res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
+                    "dcoeff": dcoeff, "ratio": ratio, "cc": cc, "normSel": normSel})
+        return res
