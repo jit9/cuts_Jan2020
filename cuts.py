@@ -1,7 +1,8 @@
 import os
 import numpy as np
-import scipy.stats.mstats as ms
 from numpy import ma
+import scipy.stats.mstats as ms
+from scipy.cluster.vq import kmeans2
 
 import moby2
 from moby2.scripting import products
@@ -879,19 +880,17 @@ class AnalyzeDarkLF(Routine):
         self._output_key = params.get('output_key', None)
         self._scan = params.get('scan', None)
         self._freqRange = params.get('freqRange', None)
-        self._forceResp = params.get('forceResp', True)
         self._params = params
 
     def execute(self, store):
         # retrieved relevant data from data store
-        fft_data = store.get(self._fft_data)
-        dets = store.get(self._dets)
         tod = store.get(self._tod)
-        scan_freq = store.get(self._scan)['scan_freq']
-        
+        fft_data = store.get(self._fft_data)
         fdata = fft_data['fdata']        
         df = fft_data['df']
-        sel = dets['dark_final']
+        sel = store.get(self._dets)['dark_final']
+        scan_freq = store.get(self._scan)['scan_freq']
+        
 
         # get the frequency band parameters
         frange = self._freqRange
@@ -899,9 +898,6 @@ class AnalyzeDarkLF(Routine):
         fshift = frange.get("fshift", 0.009)
         band = frange.get("band", 0.070)
         Nwin = frange.get("Nwin", 1)
-
-        if not self._forceResp:
-            respSel = None
 
         psel = []
         corr = []
@@ -959,35 +955,20 @@ class AnalyzeDarkLF(Routine):
         mnorm = ma.MaskedArray(norm, ~np.array(psel))
         mnorm_mean = mnorm.mean(axis=0)
         
-        res = {
-            "preSel": psel50,
-            "corr": mcorr_max.data,
-            "gain": mgain_mean.data,
-            "norm": mnorm_mean.data,
-        }
-        
-        preDarkSel = res["preSel"]
-
         # export the values
         results = {}
         
-        results["corrDark"] = {
-            "values": mcorr_max.data,
-        }
-        results["gainDark"] = {
-            "values": mgain_mean.data
-        }
-        results["normDark"] = {
-            "values": mnorm_mean.data
-        }
-        results["darkSel"] = preDarkSel.copy()  # not sure why copy is
-                                                # needed
+        results["corrDark"] = mcorr_max.data,
+        results["gainDark"] = mgain_mean.data
+        results["normDark"] = mnorm_mean.data
+        results["darkSel"] = psel50.copy()  # not sure why copy is needed
         store.set(self._output_key, results)
         
     def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq):
         """
         Find correlations and gains to the main common mode over a frequency range
         """
+        # get relevant low freq data in the detectors selected
         lf_data = fdata[sel,frange[0]:frange[1]]
         ndet = len(sel)
         dcoeff = None
@@ -998,13 +979,11 @@ class AnalyzeDarkLF(Routine):
         if self._params.get("useTaper",False):
             taper = get_sine2_taper(frange, edge_factor = 6)
             lf_data *= np.repeat([taper],len(lf_data),axis=0)
-        else:
-            taper = np.ones(frange[1]-frange[0])
 
         # Scan frequency rejection
         if self._params.get("cancelSync",False) and (scan_freq/df > 7):
             i_harm = get_iharm(frange, df, scan_freq,
-                               wide=self._param.get("wide",True))
+                               wide=self._params.get("wide",True))
             lf_data[:, i_harm] = 0.0
 
         # Get correlation matrix
@@ -1020,42 +999,66 @@ class AnalyzeDarkLF(Routine):
         fnorm = np.sqrt(np.abs(np.diag(c)))
         norm[sel] = fnorm*np.sqrt(2./nsamps)
         nnorm = norm/np.sqrt(nsamps)
-        
+
+        # get a range of valid norm values 
         nlim = ppar.get("normLimit",[0.,1e15])
-        if np.ndim(nlim) == 0: nlim = [0,nlim]
+        if np.ndim(nlim) == 0:
+            nlim = [0, nlim]
         normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
 
-        # Check if norms are divided in 2 groups. Use the higher norms
+        # If sigmaSep is specified, check if norms are divided in 2 groups,
+        # and use the higher norms
         sigs = ppar.get("sigmaSep", None)
         if sigs is not None:
+            # use k-means clustering to split the norm into two groups
+            # cent refers to the center of each cluster and
+            # lab refers to the label of each data (1: cluster 1; 2: cluster 2)
             cent, lab = kmeans2(nnorm[normSel],2)
+
+            # if all groups are larger than 20% of all data
             frac = 0.2
             if lab.sum() > len(lab)*frac and lab.sum() < len(lab)*(1-frac):
+                # sort the norm value for both of the group
                 c0 = np.sort(nnorm[normSel][lab==0])
                 c1 = np.sort(nnorm[normSel][lab==1])
-                mc0 = c0[len(c0)/2]; mc1 = c1[len(c1)/2];
+
+                # find the medium
+                # not sure why this is needed versus just calling the medium
+                mc0 = c0[len(c0)/2]
+                mc1 = c1[len(c1)/2]
+
+                # estimating the std using the fact that the std is
+                # 0.741 times the interquantile range (1st and 3rd)
+                # not sure why this is needed versus just calling the std
                 sc0 = 0.741*(c0[(3*len(c0))/4] - c0[len(c0)/4])
                 sc1 = 0.741*(c1[(3*len(c1))/4] - c1[len(c1)/4])
-                sep =  (mc0 + sigs*sc0 - (mc1 - sigs*sc1))*np.sign(mc1-mc0)
-                if sep < 0.:
+
+                # This calculation doesn't make sense to me, and it's probably
+                # incorrect consider when mc0>mc1 this formula means nothing
+                # [original formula]
+                # sep =  (mc0 + sigs*sc0 - (mc1 - sigs*sc1))*np.sign(mc1-mc0)
+                # [new formula]
+                sigs_data = np.abs(mc0-mc1)/(sc0+sc1)
+                if sigs_data > sigs:
+                    # use the higher norm group
                     if mc1 > mc0:
                         normSel[normSel] *= (lab==1)
                     else:
                         normSel[normSel] *= (lab==0)
+                        
+            # in all other cases except when there is only one group
+            # use the larger group, the other group is treated as an
+            # outlier
             elif lab.sum() > 0:
                 if lab.sum() > len(lab)/2:
                     normSel[normSel] *= (lab==1)
                 else:
                     normSel[normSel] *= (lab==0)
 
-        respSel = np.ones(sel.shape,dtype=bool)
-        
-        presel_params = self._params.get("presel",{})
-        presel_method = presel_params.get("method", "median")
-
+        # check which preselection is specified
+        presel_method = ppar.get("method", "median")
         if presel_method is "median":
-            sl = presel_by_median(cc, sel=normSel[sel],
-                                  forceSel=respSel[sel],**presel_params)
+            sl = presel_by_median(cc, sel=normSel[sel], **presel_params)
             res["groups"] = None
             
         elif presel_method is "groups":
@@ -1066,7 +1069,6 @@ class AnalyzeDarkLF(Routine):
         else:
             raise "ERROR: Unknown preselection method"
         
-        #if respSel is not None: sl *= respSel[sel]
         preSel = sel.copy()
         preSel[sel] = sl
 

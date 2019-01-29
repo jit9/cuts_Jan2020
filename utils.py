@@ -17,7 +17,7 @@ def checksize(n):
     return (1 if n == 1 else 0)
 
 
-def presel_by_median(cc, sel = None, **kwargs):
+def presel_by_median(cc, sel=None, **kwargs):
     """
     minCorr: minimum correlation requiered for preselection
     superMinCorr: minimum correlation requiered in case minCorr produces less than
@@ -30,13 +30,20 @@ def presel_by_median(cc, sel = None, **kwargs):
         minSel = 0
         minFrac = 10000
     """
-    if sel is None: sel = np.ones(cc.shape[0],dtype=bool)
-    minCorr = kwargs.get("minCorr",0.6)
-    superMinCorr = kwargs.get("superMinCorr",0.3)
-    minSel = kwargs.get("minSel",10)
-    minFrac = kwargs.get("minFrac",10)
+    if sel is None:
+        sel = np.ones(cc.shape[0],dtype=bool)
+        
+    minCorr = kwargs.get("minCorr", 0.6)
+    superMinCorr = kwargs.get("superMinCorr", 0.3)
+    minSel = kwargs.get("minSel", 10)
+    minFrac = kwargs.get("minFrac", 10)
+
+    # select those detectors whose medium are above a specified threshold
     sl = (np.median(abs(cc),axis=0) > minCorr)*sel
-    if kwargs.get("forceSel") is not None: sl *= kwargs.get("forceSel") # NOT PRETTY
+    
+    if kwargs.get("forceSel") is not None:
+        sl *= kwargs.get("forceSel") # NOT PRETTY
+        
     if sl.sum() < np.max([cc.shape[0]/minFrac,minSel]):
         print "ERROR: did not find any valid detectors for low frequency analysis."
         sl = (np.median(abs(cc),axis=0) > superMinCorr)*sel
@@ -138,6 +145,7 @@ def get_sine2_taper(frange, edge_factor = 6):
     return taper
 
 def get_iharm(frange, df, scan_freq, wide = False):
+    # Get the harmonic mode of the scan frequency
     n_harm = int(np.ceil(frange[1]*df/scan_freq))
     f_harm = (np.arange(n_harm)+1)*scan_freq
     if wide:
