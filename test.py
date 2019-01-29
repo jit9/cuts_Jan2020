@@ -151,7 +151,7 @@ lf_dark_params = {
     'dets': 'dets',
     'tod': 'tod',
     'output_key': 'lf_dark',
-    'scan': 'scan_params'
+    'scan': 'scan_params',
     'presel': {
         'method': 'median',
         'minSel': 0,
@@ -167,7 +167,7 @@ lf_dark_params = {
         'Nwin': 1,
     },
 }
-loop.add_routine(AnalyzeLF(**lf_dark_params))
+loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
 
 
 # run pipeline

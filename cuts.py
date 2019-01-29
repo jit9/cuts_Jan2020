@@ -842,7 +842,6 @@ class FouriorTransform(Routine):
         self._input_key = params.get('input_key', None)
         self._output_key = params.get('output_key', None)
         self._fft_data = params.get('fft_data', None)
-        
 
     def execute(self, store):
         tod = store.get(self._input_key)
@@ -889,15 +888,10 @@ class AnalyzeDarkLF(Routine):
         dets = store.get(self._dets)
         tod = store.get(self._tod)
         scan_freq = store.get(self._scan)['scan_freq']
-        df = fft_data['df']
         
-        # Note that gainLive can be defined as the factor by which to
-        # multiply the common mode to fit a given detector signal.  For
-        # this reason the calibration process divides each detector by
-        # this gain to equalize the array.  Note that stable detectors
-        # here should be the same as the calibration fiducial detectors,
-        # but in this code they are defined as the common mode stable
-        # detectors.
+        fdata = fft_data['fdata']        
+        df = fft_data['df']
+        sel = dets['dark_final']
 
         # get the frequency band parameters
         frange = self._freqRange
@@ -1022,7 +1016,7 @@ class AnalyzeDarkLF(Routine):
 
         # Get Norm
         ppar = self._params.get("presel",{})
-        norm = numpy.zeros(ndet,dtype=float)
+        norm = np.zeros(ndet,dtype=float)
         fnorm = np.sqrt(np.abs(np.diag(c)))
         norm[sel] = fnorm*np.sqrt(2./nsamps)
         nnorm = norm/np.sqrt(nsamps)
@@ -1057,7 +1051,7 @@ class AnalyzeDarkLF(Routine):
         respSel = np.ones(sel.shape,dtype=bool)
         
         presel_params = self._params.get("presel",{})
-        presel_method = presel_param.get("method", "median")
+        presel_method = presel_params.get("method", "median")
 
         if presel_method is "median":
             sl = presel_by_median(cc, sel=normSel[sel],
@@ -1071,6 +1065,7 @@ class AnalyzeDarkLF(Routine):
             res["groups"] = {"G": G, "ind": ind, "ld": ld, "smap": smap}
         else:
             raise "ERROR: Unknown preselection method"
+        
         #if respSel is not None: sl *= respSel[sel]
         preSel = sel.copy()
         preSel[sel] = sl

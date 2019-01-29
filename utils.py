@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def nextregular(n):
     while not checksize(n): n+=1
     return n
@@ -12,7 +15,6 @@ def checksize(n):
     while not (n%3): n/=3
     while not (n%2): n/=2
     return (1 if n == 1 else 0)
-
 
 
 def presel_by_median(cc, sel = None, **kwargs):
@@ -33,11 +35,11 @@ def presel_by_median(cc, sel = None, **kwargs):
     superMinCorr = kwargs.get("superMinCorr",0.3)
     minSel = kwargs.get("minSel",10)
     minFrac = kwargs.get("minFrac",10)
-    sl = (numpy.median(abs(cc),axis=0) > minCorr)*sel
+    sl = (np.median(abs(cc),axis=0) > minCorr)*sel
     if kwargs.get("forceSel") is not None: sl *= kwargs.get("forceSel") # NOT PRETTY
     if sl.sum() < np.max([cc.shape[0]/minFrac,minSel]):
         print "ERROR: did not find any valid detectors for low frequency analysis."
-        sl = (numpy.median(abs(cc),axis=0) > superMinCorr)*sel
+        sl = (np.median(abs(cc),axis=0) > superMinCorr)*sel
         if sl.sum() < minSel:
             raise RuntimeError, "PRESELECTION FAILED, did not find any valid detectors for low frequency analysis."
     else:
