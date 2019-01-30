@@ -1,12 +1,7 @@
-import os
 import numpy as np
-from numpy import ma
-import scipy.stats.mstats as ms
-from scipy.cluster.vq import kmeans2
 
 import moby2
 from moby2.scripting import products
-from moby2.analysis import hwp
 from todloop import Routine
 
 from utils import *

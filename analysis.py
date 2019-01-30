@@ -1,12 +1,9 @@
-import os
 import numpy as np
 from numpy import ma
 import scipy.stats.mstats as ms
 from scipy.cluster.vq import kmeans2
 
 import moby2
-from moby2.scripting import products
-from moby2.analysis import hwp
 from todloop import Routine
 
 from utils import *
@@ -179,12 +176,13 @@ class AnalyzeTemperature(Routine):
         dTemp = None
         temperatureCut = False
         
-        if self._channel is None or self._T_max is None or self._dT_max is None:
+        if self._channel is None or self._T_max is None \
+           or self._dT_max is None:
             pass
         else:
             thermometers = []
-            for ch in channels:
-                thermometer = tod.get_hk( ch, fix_gaps=True)
+            for ch in self._channel:
+                thermometer = tod.get_hk(ch, fix_gaps=True)
                 if len(np.diff(thermometer).nonzero()[0]) > 0:
                     thermometers.append(thermometer)
             if len(thermometers) > 0:
@@ -195,9 +193,9 @@ class AnalyzeTemperature(Routine):
                 th_trend = moby2.tod.detrend_tod(data=thermometers)
                 Temp = th_mean[0]
                 dTemp = th_trend[1][0] - th_trend[0][0]
-                if (Temp > T_max) or (abs(dTemp) > dT_max):
-                    temperatureCut = True        
-
+                if (Temp > self._T_max) or (abs(dTemp) > self._dT_max):
+                    temperatureCut = True
+                    
         thermal_results = {
             'Temp': Temp,
             'dTemp': dTemp,
@@ -257,11 +255,10 @@ class AnalyzeDarkLF(Routine):
         # retrieved relevant data from data store
         tod = store.get(self._tod)
         fft_data = store.get(self._fft_data)
-        fdata = fft_data['fdata']        
+        fdata = fft_data['fdata']
         df = fft_data['df']
         sel = store.get(self._dets)['dark_final']
         scan_freq = store.get(self._scan)['scan_freq']
-        
 
         # get the frequency band parameters
         frange = self._freqRange
@@ -284,13 +281,14 @@ class AnalyzeDarkLF(Routine):
             n_l = int(round((fmin + i*fshift)/df))
             n_h = int(round((fmin + i*fshift + band)/df))
 
-            # if there are too few elements then add a few more
-            # to have exactly the minimum required 
+            # if there are too few elements then add a few more to
+            # have exactly the minimum required
             if (n_h - n_l) < minFreqElem:
                 n_h = n_l + minFreqElem
 
             # perform low frequency analysis
-            r = self.lowFreqAnal(fdata, sel, [n_l, n_h], df, tod.nsamps, scan_freq)
+            r = self.lowFreqAnal(fdata, sel, [n_l, n_h], df,
+                                 tod.nsamps, scan_freq)
 
             # append the results to the relevant lists
             psel.append(r["preSel"])
@@ -318,7 +316,7 @@ class AnalyzeDarkLF(Routine):
         mgain = ma.MaskedArray(gain, ~np.array(psel))
         mgain_mean = mgain.mean(axis=0)
 
-        # use max as representative values for corra
+        # use max as representative values for corr
         mcorr = ma.MaskedArray(corr, ~np.array(psel))
         mcorr_max = mcorr.max(axis=0)
 
@@ -336,18 +334,16 @@ class AnalyzeDarkLF(Routine):
         store.set(self._output_key, results)
         
     def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq):
-        """
-        Find correlations and gains to the main common mode over a frequency range
+        """Find correlations and gains to the main common mode over a
+        frequency range
         """
         # get relevant low freq data in the detectors selected
-        lf_data = fdata[sel,frange[0]:frange[1]]
+        lf_data = fdata[sel, frange[0]:frange[1]]
         ndet = len(sel)
-        dcoeff = None
-        ratio = None
         res = {}
 
         # Apply sine^2 taper to data
-        if self._params.get("useTaper",False):
+        if self._params.get("useTaper", False):
             taper = get_sine2_taper(frange, edge_factor = 6)
             lf_data *= np.repeat([taper],len(lf_data),axis=0)
 
@@ -384,7 +380,7 @@ class AnalyzeDarkLF(Routine):
             # use k-means clustering to split the norm into two groups
             # cent refers to the center of each cluster and
             # lab refers to the label of each data (1: cluster 1; 2: cluster 2)
-            cent, lab = kmeans2(nnorm[normSel],2)
+            cent, lab = kmeans2(nnorm[normSel], 2)
 
             # if all groups are larger than 20% of all data
             frac = 0.2
@@ -434,31 +430,44 @@ class AnalyzeDarkLF(Routine):
             
         elif presel_method is "groups":
             G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **presel_params)
-            sl = np.zeros(cc.shape[1],dtype=bool)
+            sl = np.zeros(cc.shape[1], dtype=bool)
             sl[ld] = True
-            res["groups"] = {"G": G, "ind": ind, "ld": ld, "smap": smap}
+            res["groups"] = {
+                "G": G,
+                "ind": ind,
+                "ld": ld,
+                "smap": smap
+            }
         else:
             raise "ERROR: Unknown preselection method"
-        
+
+        # The number of sels are just overwhelmingly confusing
+        # To clarify for myself,
+        # - normSel: selects the detectors with good norm
+        # - sel: the initial selection of detectors specified
+        #        for this case it is selection of dark detectors
+        # - sl: is the preselected detectors from the median
+        #       or group methods
+        # Here it's trying to apply the preselection to the
+        # dark selection
         preSel = sel.copy()
         preSel[sel] = sl
-
+        
         # Get Correlations
-        u, s, v = np.linalg.svd( lf_data[sl], full_matrices=False )
+        u, s, v = np.linalg.svd(lf_data[sl], full_matrices=False )
         corr = np.zeros(ndet)
-        if par.get("doubleMode",False):
+        if par.get("doubleMode", False):
             corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
         else:
             corr[preSel] = np.abs(u[:,0])*s[0]/fnorm[sl]
 
         # Get Gains
-        #
         # data = CM * gain
-        #
-        gain = np.zeros(ndet,dtype=complex)
-        gain[preSel] = np.abs(u[:,0])  #/np.mean(np.abs(u[:,0]))
+        gain = np.zeros(ndet, dtype=complex)
+        gain[preSel] = np.abs(u[:, 0])
         res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
-                    "dcoeff": dcoeff, "ratio": ratio, "cc": cc, "normSel": normSel})
+                    "cc": cc, "normSel": normSel})
+        
         return res
 
 
