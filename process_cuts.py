@@ -161,7 +161,7 @@ lf_dark_params = {
     'useTaper': False,
     'cancelSync': False,
     'doubleMode': False,
-    'freqRange' : {
+    'freqRange': {
         'fmin': 0.017,
         'fshift': 0.009,
         'band': 0.071,
@@ -170,6 +170,32 @@ lf_dark_params = {
 }
 loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
 
+lf_live_params = {
+    'fft_data': 'fft_data',
+    'dets': 'dets',
+    'tod': 'tod',
+    'output_key': 'lf_live',
+    'presel': {
+        'method': 'groups',
+        'Nmin': 20,
+        'initCorr': 0.98,
+        'minCorr': 0.75,
+        'groupCorr': 0.93,
+        'normLimit': 1e9,
+    },
+    'useTaper': False,
+    'cancelSync': True,
+    'doubleMode': False,
+    'removeDark': True,
+    'freqRange': {
+        'fmin': 0.017,
+        'fshift': 0.009,
+        'band': 0.071,
+        'Nwin': 10,
+    },
+    'separateFreqs': False,
+}
+loop.add_routine(AnalyzeLiveLF(**lf_live_params))
 
 # run pipeline
 loop.run(100,101)

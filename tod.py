@@ -242,7 +242,8 @@ class CalibrateTOD(Routine):
             "stable": stable,
             "cal": resp.cal*ff,
             "calSel": ffSel*respSel,
-            "calibrated": False
+            "calibrated": False,
+            "flatfield_object": flatfield_object
         }
 
         
