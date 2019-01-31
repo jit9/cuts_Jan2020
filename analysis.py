@@ -372,56 +372,7 @@ class AnalyzeDarkLF(Routine):
         if np.ndim(nlim) == 0:
             nlim = [0, nlim]
         normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
-
-        # If sigmaSep is specified, check if norms are divided in 2 groups,
-        # and use the higher norms
-        sigs = ppar.get("sigmaSep", None)
-        if sigs is not None:
-            # use k-means clustering to split the norm into two groups
-            # cent refers to the center of each cluster and
-            # lab refers to the label of each data (1: cluster 1; 2: cluster 2)
-            cent, lab = kmeans2(nnorm[normSel], 2)
-
-            # if all groups are larger than 20% of all data
-            frac = 0.2
-            if lab.sum() > len(lab)*frac and lab.sum() < len(lab)*(1-frac):
-                # sort the norm value for both of the group
-                c0 = np.sort(nnorm[normSel][lab==0])
-                c1 = np.sort(nnorm[normSel][lab==1])
-
-                # find the medium
-                # not sure why this is needed versus just calling the medium
-                mc0 = c0[len(c0)/2]
-                mc1 = c1[len(c1)/2]
-
-                # estimating the std using the fact that the std is
-                # 0.741 times the interquantile range (1st and 3rd)
-                # not sure why this is needed versus just calling the std
-                sc0 = 0.741*(c0[(3*len(c0))/4] - c0[len(c0)/4])
-                sc1 = 0.741*(c1[(3*len(c1))/4] - c1[len(c1)/4])
-
-                # This calculation doesn't make sense to me, and it's probably
-                # incorrect consider when mc0>mc1 this formula means nothing
-                # [original formula]
-                # sep =  (mc0 + sigs*sc0 - (mc1 - sigs*sc1))*np.sign(mc1-mc0)
-                # [new formula]
-                sigs_data = np.abs(mc0-mc1)/(sc0+sc1)
-                if sigs_data > sigs:
-                    # use the higher norm group
-                    if mc1 > mc0:
-                        normSel[normSel] *= (lab==1)
-                    else:
-                        normSel[normSel] *= (lab==0)
-                        
-            # in all other cases except when there is only one group
-            # use the larger group, the other group is treated as an
-            # outlier
-            elif lab.sum() > 0:
-                if lab.sum() > len(lab)/2:
-                    normSel[normSel] *= (lab==1)
-                else:
-                    normSel[normSel] *= (lab==0)
-
+        
         # check which preselection is specified
         presel_method = ppar.get("method", "median")
         if presel_method is "median":
@@ -689,56 +640,7 @@ class AnalyzeLiveLF(Routine):
         if np.ndim(nlim) == 0:
             nlim = [0, nlim]
         normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
-
-        # If sigmaSep is specified, check if norms are divided in 2 groups,
-        # and use the higher norms
-        sigs = ppar.get("sigmaSep", None)
-        if sigs is not None:
-            # use k-means clustering to split the norm into two groups
-            # cent refers to the center of each cluster and
-            # lab refers to the label of each data (1: cluster 1; 2: cluster 2)
-            cent, lab = kmeans2(nnorm[normSel], 2)
-
-            # if all groups are larger than 20% of all data
-            frac = 0.2
-            if lab.sum() > len(lab)*frac and lab.sum() < len(lab)*(1-frac):
-                # sort the norm value for both of the group
-                c0 = np.sort(nnorm[normSel][lab==0])
-                c1 = np.sort(nnorm[normSel][lab==1])
-
-                # find the medium
-                # not sure why this is needed versus just calling the medium
-                mc0 = c0[len(c0)/2]
-                mc1 = c1[len(c1)/2]
-
-                # estimating the std using the fact that the std is
-                # 0.741 times the interquantile range (1st and 3rd)
-                # not sure why this is needed versus just calling the std
-                sc0 = 0.741*(c0[(3*len(c0))/4] - c0[len(c0)/4])
-                sc1 = 0.741*(c1[(3*len(c1))/4] - c1[len(c1)/4])
-
-                # This calculation doesn't make sense to me, and it's probably
-                # incorrect consider when mc0>mc1 this formula means nothing
-                # [original formula]
-                # sep =  (mc0 + sigs*sc0 - (mc1 - sigs*sc1))*np.sign(mc1-mc0)
-                # [new formula]
-                sigs_data = np.abs(mc0-mc1)/(sc0+sc1)
-                if sigs_data > sigs:
-                    # use the higher norm group
-                    if mc1 > mc0:
-                        normSel[normSel] *= (lab==1)
-                    else:
-                        normSel[normSel] *= (lab==0)
-                        
-            # in all other cases except when there is only one group
-            # use the larger group, the other group is treated as an
-            # outlier
-            elif lab.sum() > 0:
-                if lab.sum() > len(lab)/2:
-                    normSel[normSel] *= (lab==1)
-                else:
-                    normSel[normSel] *= (lab==0)
-
+        
         # check which preselection is specified
         presel_method = ppar.get("method", "median")
         if presel_method is "median":
