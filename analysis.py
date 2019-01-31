@@ -296,19 +296,29 @@ class AnalyzeDarkLF(Routine):
             gain.append(np.abs(r["gain"]))
             norm.append(r["norm"])
 
-        # count pre-selected
+        # count the decision for each frequency window, for example
+        # if we looked at 10 frequency window, psel may look like
+        # [S S U S S U S U S U] with S means selected as good and
+        # u means unselected (bad). Here we want to count the number
+        # of "votes" saying this detector is good
         psel = np.sum(psel, axis=0)
+
+        # get the highest amount of score that the detectors receive
+        # and use this as a threshold to judge the rest of the
+        # detectors
         Nmax = psel.max()
 
-        # number of pre-selected above median mask this marks a good
-        # selection of detectors
+        # For any detectors who are "voted" as good more than half
+        # of the maximum "votes" will be selected as good
         psel50 = psel >= Nmax/2.
 
         # Normalize gain by the average gain of a good selection of
         # detectors, here this selection is given by psel50 AND presel
         for g, s in zip(gain, psel):
             g /= np.mean(g[psel50*s])
+            
         gain = np.array(gain)
+        
         # give a default gain of 0 for invalid data
         gain[np.isnan(gain)] = 0.
 
@@ -438,6 +448,9 @@ class AnalyzeLiveLF(Routine):
         self._params = params
 
     def execute(self, store):
+        # similar to the dark analysis, for more comments please refer to
+        # the AnalyzeDarkLF
+        
         # retrieve relevant data from store
         tod = store.get(self._tod)
         live = store.get(self._dets)['live_final']
