@@ -852,3 +852,289 @@ class AnalyzeLiveLF(Routine):
             fcmodes, n_l, nsamps, df)
         cmodes /= np.linalg.norm(cmodes, axis=1)[:, np.newaxis]
         return fcmodes, cmodes, cmodes_dt
+
+
+class GetSlowMode(Routine):
+    def __init__(self, **params):
+        self._params = params
+        self._tod = params.get('tod', None)
+        self._driftFilter = params.get('driftFilter', None)
+        self._output_key = paramsg.et('output_key', None)
+
+    def execute(self, store):
+        tod = store.get(self._tod)
+
+        # get the range of frequencies to work on
+        n_l = 1
+        n_h = nextregular(int(round(self._driftFilter/df))) + 1
+
+        # extract the fourior modes
+        lf_data = fdata[:,n_l:n_h]
+
+        # calculate the mean fourior modes for live and dark 
+        fcmL = lf_data[self.preLiveSel].mean(axis = 0)
+        fcmD = lf_data[self.preDarkSel].mean(axis = 0)
+
+        # get the common modes for both live and dark
+        dsCM, dsCM_dt = get_time_domain_modes(fcmL,n_l, tod.nsamps, df)
+        dsDCM, _ = get_time_domain_modes(fcmD,n_l, tod.nsamps, df)
+
+        results = {
+            "dsCM": dsCM,
+            "dsDCM": dsDCM
+        }
+        store.set(self._output_key, results)
+
+    
+class Retrend(Routine):
+    def __init__(self, **params):
+        self._params = params
+
+
+    def execute(self, store):
+        # get the trend for the live detectors
+        trL = numpy.array(trend).T[self.preLiveSel].mean(axis=0)
+        trLt = trL[:,np.newaxis]
+
+        # retrend the live detectors
+        moby2.tod.retrend_tod(trLt, data = self.dsCM)
+        
+        # get the trend for the dark detectors
+        trD = numpy.array(trend).T[self.preDarkSel].mean(axis=0)
+        trDt = trD[:,np.newaxis]
+
+        # retrend the dark detectors
+        moby2.tod.retrend_tod(trDt, data = self.dsDCM)
+        
+
+class GetDriftErrors(Routine):
+    def __init__(self, **params):
+        self._params = params
+        self._output_key = params.get('output_key', None)
+
+
+    def execute(self, store):
+        # Get Drift-Error
+        DE = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, nmodes = par["DEModes"], 
+                          highOrder=False, preSel=self.preLiveSel)
+        
+        results = {
+            "DELive": DE
+        }
+
+        store.set(self._output_key, results)
+
+
+        
+def highFreqAnal(fdata, sel, range, nsamps,  
+                 nmodes=0, highOrder = False, preSel = None,
+                 scanParams = None):
+    """
+    @brief Find noise RMS, skewness and kurtosis over a frequency band
+    """
+    ndet = len(sel)
+
+    # get the high frequency fourior modes
+    hf_data = fdata[sel,range[0]:range[1]]
+    if nmodes > 0:
+        # see if there is anything preselected
+        if preSel is None:
+            preSel = np.ones(sel.sum(),dtype=bool)
+        else:
+            preSel = preSel[sel]
+
+        # find the correlation between different detectors
+        c = np.dot(hf_data[preSel],hf_data[preSel].T.conjugate())
+
+        # find the first few common modes in the detectors and
+        # deproject them
+        u, w, v = np.linalg.svd(c, full_matrices = 0)
+        kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
+        modes = np.dot(kernel,hf_data[preSel])
+        coeff = np.dot(modes,hf_data.T.conj())
+        hf_data -= np.dot(coeff.T.conj(),modes)
+
+    # compute the rms for the detectors
+    rms = np.zeros(ndet)
+    rms[sel] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
+
+    # if we are interested in high order effects, skew and kurtosis will
+    # be calculated here
+    if highOrder:
+        hfd, _ = get_time_domain_modes( hf_data, 1, nsamps)
+        skewt = stat.skewtest(hfd,axis=1)
+        kurtt = stat.kurtosistest(hfd,axis=1)
+        if scanParams is not None:
+            T = scanParams["T"]
+            pivot = scanParams["pivot"]
+            N = scanParams["N"]
+            f = float(hfd.shape[1])/nsamps
+            t = int(T*f); p = int(pivot*f)
+            prms = []; pskewt = []; pkurtt = []
+            for c in xrange(N):
+                # i see this as calculating the statistics for each
+                # swing (no turning part) so the statistics is not
+                # affected by the scan
+                prms.append(hfd[:,c*t+p:(c+1)*t+p].std(axis=1))
+                pskewt.append(stat.skewtest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
+                pkurtt.append(stat.kurtosistest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
+            prms = np.array(prms).T
+            pskewt = np.array(pskewt)
+            pkurtt = np.array(pkurtt)
+            return (rms, skewt, kurtt, prms, pskewt, pkurtt)
+        else:
+            return (rms, skewt, kurtt)
+    else:
+        return rms
+
+
+class AnalyzeMF(Routine):
+    def __init__(self, **params):
+        self._params = params
+        self._midFreqFilter = params.get("midFreqFilter", None)
+        self._output_key = params.get("output_key", None)
+
+
+    def execute(self, store):
+        # get the frequency range to work on
+        n_l = int(self._midFreqFilter[0]/df))
+        n_h = int(self._midFreqFilter[1]/df))        
+
+        # perform a high frequency like analysis on this range
+        MFE = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, nmodes = par["MFEModes"], 
+                             highOrder = False, preSel = self.preLiveSel)
+        
+        results = {
+            "MFELive": MFE
+        }
+
+        store.set(self._output_key, results)
+
+
+class AnalyzeHF(Routine):
+    def __init__(self, **params):
+        self._params = params
+
+    def execute(self, store):
+        # get the range of frequencies to work with
+        n_l = int(round(par["highFreqFilter"][0]/df))
+        n_h = int(round(par["highFreqFilter"][1]/df))
+        # make sure that n_h is a number that's optimized in fft
+        n_h = nextregular(n_h-n_l) + n_l
+
+        # if partial is labeled the analysis will be carried out
+        # for each individual scan between the turnning points
+        if not(par["getPartial"]):
+            rms, skewt, kurtt = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, 
+                                           nmodes=par["HFLiveModes"], 
+                                           highOrder=True, preSel = self.preLiveSel)
+        else:
+            rms, skewt, kurtt, prms, pskewt, pkurtt=highFreqAnal(fdata, live, 
+                                           [n_l,n_h], self.ndata, nmodes = par["HFLiveModes"], 
+                                           highOrder=True, preSel=self.preLiveSel, 
+                                           scanParams=self.scan)
+
+            # store the statistics for partial
+            results = {}
+            results["partialRMSLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
+            results["partialSKEWLive"] = np.zeros([self.ndet,self.chunkParams["N"]]) 
+            results["partialKURTLive"] = np.zeros([self.ndet,self.chunkParams["N"]]) 
+            results["partialSKEWPLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
+            results["partialKURTPLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
+            results["partialRMSLive"][live] =  prms
+            results["partialSKEWLive"][live] = pskewt.T[:,0]
+            results["partialKURTLive"][live] = pkurtt.T[:,0]
+            results["partialSKEWPLive"][live] = pskewt.T[:,1]
+            results["partialKURTPLive"][live] = pkurtt.T[:,1]
+            
+        # store the statistics for global
+        results["rmsLive"] = rms
+        results["skewLive"] = np.zeros(self.ndet)
+        results["kurtLive"] = np.zeros(self.ndet)
+        results["skewpLive"] = np.zeros(self.ndet)
+        results["kurtpLive"] = np.zeros(self.ndet)
+        results["skewLive"][live] = skewt[0]
+        results["kurtLive"][live] = kurtt[0]
+        results["skewpLive"][live] = skewt[1]
+        results["kurtpLive"][live] = kurtt[1]        
+
+        # analyze the dark detectors for the same frequency range
+        rms = highFreqAnal(fdata, dark, [n_l,n_h], self.ndata, nmodes = par["HFDarkModes"], 
+                             highOrder = False, preSel = self.preDarkSel)
+        results["rmsDark"] = rms
+
+
+class AnalyzeAtm(Routine):
+    def __init__(self, **params):
+        """This routine does the atomosphere 1/f analysis"""
+        self._params = params
+        self._fitPowerLaw = params.get("fitPowerLaw", False)
+
+    def execute(self, store):
+        if self._fitPowerLaw:
+            # look at both the live and dark detectors
+            sel = preLiveSel + preDarkSel
+
+            # combine the rms from both live and dark detectors
+            rms = self.crit["rmsLive"]["values"] + self.crit["rmsDark"]["values"]
+
+            # fit an atmosphere model with it 
+            powLaw, level, knee = fit_atm(fdata, sel, dt, df, rms, self.scan_freq,
+                                          **par.get("atmFit",{}))
+            results = {
+                "atmPowLaw": powLaw,
+                "atmLevel": level,
+                "atmKnee": knee
+            }
+            self.store(self._output_key, results)
+
+
+            
+def fit_atm(fdata, sel, dt, df, noise, scanf, 
+            fminA=0.2, fmaxA=3., fmaxT = 10., 
+            its = 1, width = 0.005):
+    """
+    Fit a power law to the atmosphere signal in a range of frequencies.
+    """
+    scale = 2*dt**2*df
+    delta = 0.7
+    kneeM = fmaxA+delta
+    ind_ini = int(fminA/df)
+    ps = np.power(np.abs(fdata[sel,:int(fmaxT/df)]),2)*scale
+    # Get scan harmonics
+    n_harm = int(np.ceil(fmaxT/scanf))
+    i_harm = np.array(np.round(np.arange(1,n_harm+1)*scanf/df), dtype=int)
+    i_harmw = i_harm.copy()
+    di = int(width/df)
+    for i in xrange(di):
+        i_harmw = np.hstack([i_harmw,i_harm-(i+1)])
+        i_harmw = np.hstack([i_harmw,i_harm+(i+1)])
+    i_harmw.sort()
+    # Iterate range fit
+    for it in xrange(its):
+        fmax = kneeM-delta-fminA
+        imin = int(fminA/df); imax = int(fmax/df)
+        psr = ps[:,imin:imax]
+        log_ps = np.log(psr)
+        freq = np.arange(imin,imax)*df
+        log_freq = np.log(freq)
+        w = np.diff(log_freq)
+        w = np.hstack([w,w[-1]])
+        iharm = i_harmw[(i_harmw>imin)*(i_harmw<imax)]-imin
+        s = np.ones(len(freq),dtype=bool)
+        s[iharm] = False
+        m,n = np.polyfit(log_freq[s], log_ps[:,s].T, 1, w=w[s])
+        pl = np.power(freq[np.newaxis,s].repeat(ps.shape[0],0),
+                      m[:,np.newaxis].repeat(len(freq[s]),1))*\
+                      np.exp(n[:,np.newaxis].repeat(len(freq[s]),1))
+        c = np.sum(psr[:,s]*pl,axis=1)/np.sum(pl*pl,axis=1)
+        level = np.exp(n)*c
+        knee = np.power(noise[sel]/level,1./m)
+        kneeM = np.median(knee)
+    mA = np.zeros(fdata.shape[0])
+    levelA = np.zeros(fdata.shape[0])
+    kneeA = np.zeros(fdata.shape[0])
+    mA[sel] = m
+    levelA[sel] = level
+    kneeA[sel] = knee
+    return mA, levelA, kneeA            
