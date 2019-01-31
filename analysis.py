@@ -602,183 +602,253 @@ class AnalyzeLiveLF(Routine):
             mcorr_max = mcorr.max(axis=0)
             mnorm = ma.MaskedArray(norm,~np.array(psel))
             mnorm_mean = mnorm.mean(axis=0)
-            
-            res = {
-                "preSel": psel50,
-                "corr": mcorr_max.data,
-                "gain": mgain_mean.data,
-                "norm": mnorm_mean.data,
-                "all_data": all_data
-            }
-            
+                        
             if self._removeDark:
                 mdarkRatio = ma.MaskedArray(darkRatio,~np.array(psel))
                 mdarkRatio_mean = mdarkRatio.mean(axis=0)
                 res['darkRatio'] = mdarkRatio_mean.data
-                        
-            self.preLiveSel[fbSel] = res["preSel"][fbSel]
-            self.liveSel[fbSel] = res["preSel"][fbSel]
+
+            results = {
+                "preLiveSel": psel50[fbSel],
+                "liveSel": psel50[fbSel],
+                "corrLive": mcorr_max.data[fbSel],
+                "gainLive": mgain_mean.data[fbSel],
+                "normLive": mnorm_mean.data[fbSel],
+                "darkRatio": mdarkRatio_mean.data[fbSel]
+            }
 
             if res.has_key('darkRatio'):
                 self.crit["darkRatioLive"]["values"][fbSel] = res["darkRatio"][fbSel]
 
-            self.crit["corrLive"][fbSel] = res["corr"][fbSel]
-            self.crit["gainLive"][fbSel] = res["gain"][fbSel]
-            self.crit["normLive"][fbSel] = res["norm"][fbSel]
-
-            self.multiFreqData[fbSel] = res["all_data"]
+            multiFreqData[fbSel] = all_data
             
         # Undo flatfield correction
         self.crit["gainLive"] /= np.abs(ff)
 
 
-def lowFreqAnal(fdata, sel, frange, df, nsamps, scan_freq, par, 
-                fcmodes=None, respSel=None, flatfield=None):
-    """
-    @brief Find correlations and gains to the main common mode over a frequency range
-    """
-    lf_data = fdata[sel,frange[0]:frange[1]].copy()
-    ndet = len(sel)
-    dcoeff = None
-    ratio = None
-    res = {}
+    def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq,
+                    fcmodes=None, respSel=None, flatfield=None):
+        """Find correlations and gains to the main common mode over a
+        frequency range
+        """
+        # get relevant low freq data in the detectors selected
+        lf_data = fdata[sel, frange[0]:frange[1]]
+        ndet = len(sel)
+        res = {}
 
-    # Apply sine^2 taper to data
-    if par.get("useTaper", False):
-        taper = get_sine2_taper(frange, edge_factor = 6)
-        lf_data *= np.repeat([taper], len(lf_data),axis=0)
+        # Apply sine^2 taper to data
+        if self._params.get("useTaper", False):
+            taper = get_sine2_taper(frange, edge_factor = 6)
+            lf_data *= np.repeat([taper],len(lf_data),axis=0)
 
-    # Deproject correlated modes
-    if fcmodes is not None:
-        data_norm = np.linalg.norm(lf_data,axis=1)
-        dark_coeff = []
+
+        # Deproject correlated modes
+        if fcmodes is not None:
+            data_norm = np.linalg.norm(lf_data,axis=1)
+            dark_coeff = []
+
+            # actually do the deprojection here
+            for m in fcmodes:
+                coeff = numpy.dot(lf_data.conj(),m)
+                lf_data -= numpy.outer(coeff.conj(),m)
+                dark_coeff.append(coeff)
+
+            # Reformat dark coefficients
+            if len(dark_coeff) > 0:
+                dcoeff = numpy.zeros([len(dark_coeff),ndet],dtype=complex)
+                dcoeff[:,sel] = np.array(dark_coeff)
+
+            # Get Ratio
+            ratio = numpy.zeros(ndet,dtype=float)
+            data_norm[data_norm==0.] = 1.
+            ratio[sel] = np.linalg.norm(lf_data,axis=1)/data_norm
+            
+
+        # Scan frequency rejection
+        if self._params.get("cancelSync",False) and (scan_freq/df > 7):
+            i_harm = get_iharm(frange, df, scan_freq,
+                               wide=self._params.get("wide",True))
+            lf_data[:, i_harm] = 0.0
+
+        # Get correlation matrix
+        c = np.dot(lf_data, lf_data.T.conjugate())
+        a = np.linalg.norm(lf_data, axis=1)
+        aa = np.outer(a,a)
+        aa[aa==0.] = 1.
+        cc = c/aa
+
+        # Get Norm
+        ppar = self._params.get("presel",{})
+        norm = np.zeros(ndet,dtype=float)
+        fnorm = np.sqrt(np.abs(np.diag(c)))
+        norm[sel] = fnorm*np.sqrt(2./nsamps)
+        nnorm = norm/np.sqrt(nsamps)
+
+        # get a range of valid norm values 
+        nlim = ppar.get("normLimit",[0.,1e15])
+        if np.ndim(nlim) == 0:
+            nlim = [0, nlim]
+        normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
+
+        # If sigmaSep is specified, check if norms are divided in 2 groups,
+        # and use the higher norms
+        sigs = ppar.get("sigmaSep", None)
+        if sigs is not None:
+            # use k-means clustering to split the norm into two groups
+            # cent refers to the center of each cluster and
+            # lab refers to the label of each data (1: cluster 1; 2: cluster 2)
+            cent, lab = kmeans2(nnorm[normSel], 2)
+
+            # if all groups are larger than 20% of all data
+            frac = 0.2
+            if lab.sum() > len(lab)*frac and lab.sum() < len(lab)*(1-frac):
+                # sort the norm value for both of the group
+                c0 = np.sort(nnorm[normSel][lab==0])
+                c1 = np.sort(nnorm[normSel][lab==1])
+
+                # find the medium
+                # not sure why this is needed versus just calling the medium
+                mc0 = c0[len(c0)/2]
+                mc1 = c1[len(c1)/2]
+
+                # estimating the std using the fact that the std is
+                # 0.741 times the interquantile range (1st and 3rd)
+                # not sure why this is needed versus just calling the std
+                sc0 = 0.741*(c0[(3*len(c0))/4] - c0[len(c0)/4])
+                sc1 = 0.741*(c1[(3*len(c1))/4] - c1[len(c1)/4])
+
+                # This calculation doesn't make sense to me, and it's probably
+                # incorrect consider when mc0>mc1 this formula means nothing
+                # [original formula]
+                # sep =  (mc0 + sigs*sc0 - (mc1 - sigs*sc1))*np.sign(mc1-mc0)
+                # [new formula]
+                sigs_data = np.abs(mc0-mc1)/(sc0+sc1)
+                if sigs_data > sigs:
+                    # use the higher norm group
+                    if mc1 > mc0:
+                        normSel[normSel] *= (lab==1)
+                    else:
+                        normSel[normSel] *= (lab==0)
+                        
+            # in all other cases except when there is only one group
+            # use the larger group, the other group is treated as an
+            # outlier
+            elif lab.sum() > 0:
+                if lab.sum() > len(lab)/2:
+                    normSel[normSel] *= (lab==1)
+                else:
+                    normSel[normSel] *= (lab==0)
+
+        # check which preselection is specified
+        presel_method = ppar.get("method", "median")
+        if presel_method is "median":
+            sl = presel_by_median(cc, sel=normSel[sel], **presel_params)
+            res["groups"] = None
+            
+        elif presel_method is "groups":
+            G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **presel_params)
+            sl = np.zeros(cc.shape[1], dtype=bool)
+            sl[ld] = True
+            res["groups"] = {
+                "G": G,
+                "ind": ind,
+                "ld": ld,
+                "smap": smap
+            }
+        else:
+            raise "ERROR: Unknown preselection method"
+
+        # The number of sels are just overwhelmingly confusing
+        # To clarify for myself,
+        # - normSel: selects the detectors with good norm
+        # - sel: the initial selection of detectors specified
+        #        for this case it is selection of dark detectors
+        # - sl: is the preselected detectors from the median
+        #       or group methods
+        # Here it's trying to apply the preselection to the
+        # dark selection
+        preSel = sel.copy()
+        preSel[sel] = sl
+
+
+        # Apply gain ratio in case of multichroic
+        if (flatfield is not None) and ("scale" in flatfield.fields):
+            scl = flatfield.get_property("scale",det_uid=np.where(sel)[0],
+                                         default = 1.)
+            lf_data *= np.repeat([scl],lf_data.shape[1],axis=0).T
+
+        # Get Correlations
+        u, s, v = np.linalg.svd(lf_data[sl], full_matrices=False )
+        corr = np.zeros(ndet)
+        if par.get("doubleMode", False):
+            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
+        else:
+            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm[sl]
+
+        # Get Gains
+        # data = CM * gain
+        gain = np.zeros(ndet, dtype=complex)
+        gain[preSel] = np.abs(u[:, 0])
         
-        for m in fcmodes:
-            coeff = numpy.dot(lf_data.conj(),m)
-            lf_data -= numpy.outer(coeff.conj(),m)
-            dark_coeff.append(coeff)
-
-        # Reformat dark coefficients
-        if len(dark_coeff) > 0:
-            dcoeff = numpy.zeros([len(dark_coeff),ndet],dtype=complex)
-            dcoeff[:,sel] = np.array(dark_coeff)
-
-        # Get Ratio
-        ratio = numpy.zeros(ndet,dtype=float)
-        data_norm[data_norm==0.] = 1.
-        ratio[sel] = np.linalg.norm(lf_data,axis=1)/data_norm
-
-    # Scan frequency rejection
-    if par.get("cancelSync",False) and (scan_freq/df > 7):
-        i_harm = get_iharm(frange, df, scan_freq, wide = par.get("wide",True))
-        lf_data[:,i_harm] = 0.0
-
-    # Get correlation matrix
-    c = numpy.dot(lf_data,lf_data.T.conjugate())
-    a = numpy.linalg.norm(lf_data,axis=1)
-    aa = numpy.outer(a,a)
-    aa[aa==0.] = 1.
-    cc = c/aa
-
-    # Get Norm
-    ppar = par.get("presel",{})
-    norm = numpy.zeros(ndet,dtype=float)
-    fnorm = np.sqrt(np.abs(np.diag(c)))
-    norm[sel] = fnorm*np.sqrt(2./nsamps)
-    nnorm = norm/np.sqrt(nsamps)
-    nlim = ppar.get("normLimit",[0.,1e15])
-    if np.ndim(nlim) == 0: nlim = [0,nlim]
-    normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
-
-    ppar = par.get("presel", {})
-    presel_method = ppar.get("method", "median")
-    # Get initial detectors
-    if respSel is None: 
-        respSel = np.ones(sel.shape,dtype=bool)
-    if presel_method is "median":
-        sl = presel_by_median(cc, sel=normSel[sel],
-                              forceSel=respSel[sel], ppar)
-        res["groups"] = None
-    elif par.get("presel",{}).get("method") is "groups":
-        G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], ppar)
-        sl = np.zeros(cc.shape[1],dtype=bool)
-        sl[ld] = True
-        res["groups"] = {"G": G, "ind": ind, "ld": ld, "smap": smap}
-    else:
-        raise "ERROR: Unknown preselection method"
-    #if respSel is not None: sl *= respSel[sel]
-    preSel = sel.copy()
-    preSel[sel] = sl
-
-    # Apply gain ratio in case of multichroic
-    if (flatfield is not None) and ("scale" in flatfield.fields):
-        scl = flatfield.get_property("scale",det_uid=np.where(sel)[0],
-                                                 default = 1.)
-        lf_data *= np.repeat([scl],lf_data.shape[1],axis=0).T
-
-    # Get Correlations
-    u, s, v = np.linalg.svd( lf_data[sl], full_matrices=False )
-    corr = numpy.zeros(ndet)
-    if par.get("doubleMode",False):
-        corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
-    else:
-        corr[preSel] = np.abs(u[:,0])*s[0]/fnorm[sl]
-
-    # Get Gains
-    #
-    # data = CM * gain
-    #
-    gain = numpy.zeros(ndet,dtype=complex)
-    gain[preSel] = np.abs(u[:,0])  #/np.mean(np.abs(u[:,0]))
-    res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
-                "dcoeff": dcoeff, "ratio": ratio, "cc": cc, "normSel": normSel})
-    return res
-
-
-
-def getDarkModes(fdata,darkSel,frange,df,nf,nsamps,par,tod = None):
-    """
-    @brief Get dark or thermal modes from dark detectors and thermometer
-           data.
-    @return correlated modes in frequency and time domain, plus thermometer
-            info.
-    """
-    n_l,n_h=frange
-    fc_inputs = []
-    # Dark detector drift
-    if par["darkModesParams"].get("useDarks", False):
-        dark_signal = fdata[darkSel,n_l:n_h].copy()
-        fc_inputs.extend(list(dark_signal))
-    # TEST CRYOSTAT TEMPERATURE
-    if par["darkModesParams"].get("useTherm", False) and tod is not None:
-        thermometers = []
-        for channel in par['thermParams']['channel']:
-            thermometer = tod.get_hk( channel, fix_gaps=True)
-            if len(np.diff(thermometer).nonzero()[0]) > 0:
-                thermometers.append(thermometer)
-        if len(thermometers) > 0:
-            thermometers = numpy.array(thermometers)
-            fth = numpy.fft.rfft( thermometers, nf )[:,n_l:n_h]
-            fc_inputs.extend(list(fth))
-    elif par["darkModesParams"].get("useTherm", False) and tod is None:
-            print "WARNING: TOD requiered to obtain thermometer data"
-    fc_inputs = np.array(fc_inputs)
-    if par.get("useTaper",False):
-        taper = get_sine2_taper(frange, edge_factor = 6)
-        fc_inputs *= np.repeat([taper],len(fc_inputs),axis=0)
-    # Normalize modes
-    fc_inputs /= np.linalg.norm(fc_inputs, axis=1)[:,np.newaxis]
-    # Obtain main svd modes to deproject from data
-    if par["darkModesParams"].get("useSVD",False):
-        Nmodes = par["darkModesParams"].get("Nmodes",None)
-        u, s, v = np.linalg.svd( fc_inputs, full_matrices=False )
-        if Nmodes is None: fcmodes = v[s > s.max()/10]
-        else: fcmodes = v[:Nmodes]
-    else:
-        fcmodes = fc_inputs
+        res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
+                    "dcoeff": dcoeff, "ratio": ratio, "cc": cc, "normSel": normSel})
         
-    # Get modes in time domain
-    cmodes, cmodes_dt = get_time_domain_modes(
-        fcmodes, n_l, nsamps, df)
-    cmodes /= np.linalg.norm(cmodes, axis=1)[:,np.newaxis]
-    return fcmodes, cmodes, cmodes_dt
+        return res
+
+    def getDarkModes(self, fdata, darkSel, frange, df, nf, nsamps, par, tod = None):
+        """
+        @brief Get dark or thermal modes from dark detectors and thermometer
+               data.
+        @return correlated modes in frequency and time domain, plus thermometer
+                info.
+        """
+        n_l, n_h=frange
+        fc_inputs = []
+
+        # Dark detector drift
+        if par["darkModesParams"].get("useDarks", False):
+            dark_signal = fdata[darkSel,n_l:n_h].copy()
+            fc_inputs.extend(list(dark_signal))
+
+        # TEST CRYOSTAT TEMPERATURE
+        if par["darkModesParams"].get("useTherm", False):
+            thermometers = []
+            for channel in par['thermParams']['channel']:
+                # gather thermometer data
+                thermometer = tod.get_hk( channel, fix_gaps=True)
+                if len(np.diff(thermometer).nonzero()[0]) > 0:
+                    thermometers.append(thermometer)
+                    
+            # perform a fourior analysis on thermometer data
+            # and append to the dark detector data
+            if len(thermometers) > 0:
+                thermometers = np.array(thermometers)
+                fth = np.fft.rfft( thermometers, nf )[:,n_l:n_h]
+                fc_inputs.extend(list(fth))
+
+        fc_inputs = np.array(fc_inputs)
+
+        if par.get("useTaper",False):
+            taper = get_sine2_taper(frange, edge_factor = 6)
+            fc_inputs *= np.repeat([taper],len(fc_inputs),axis=0)
+
+        # Normalize modes
+        fc_inputs /= np.linalg.norm(fc_inputs, axis=1)[:, np.newaxis]
+
+        # Obtain main svd modes to deproject from data
+        if par["darkModesParams"].get("useSVD", False):
+            Nmodes = par["darkModesParams"].get("Nmodes", None)
+            u, s, v = np.linalg.svd( fc_inputs, full_matrices=False )
+            if Nmodes is None:
+                # drop the bottom 10%
+                fcmodes = v[s > s.max()/10]
+            else:
+                fcmodes = v[:Nmodes]
+        else:
+            fcmodes = fc_inputs
+
+        # Get modes in time domain
+        cmodes, cmodes_dt = get_time_domain_modes(
+            fcmodes, n_l, nsamps, df)
+        cmodes /= np.linalg.norm(cmodes, axis=1)[:, np.newaxis]
+        return fcmodes, cmodes, cmodes_dt

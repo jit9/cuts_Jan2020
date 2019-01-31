@@ -157,3 +157,16 @@ def get_iharm(frange, df, scan_freq, wide = False):
         i_harm = np.array(np.round(f_harm/df), dtype=int)
     i_harm = i_harm[(i_harm>=frange[0])*(i_harm<frange[1])] - frange[0]
     return i_harm
+
+
+def get_time_domain_modes(fmodes, n_l, nsamps, df=1.,):
+    # Get modes in time domain
+    if fmodes.ndim == 1:
+        fmodes = fmodes[np.newaxis,:]
+    fcm = np.hstack([np.zeros((len(fmodes),n_l)),
+                        fmodes[:,:-1],
+                        np.expand_dims(np.real(fmodes[:,-1]),1)]) 
+    modes = np.fft.irfft(fcm)
+    modes_dt = 1./modes.shape[1]/df
+    modes *= np.sqrt(2.*fmodes.shape[1]/nsamps)
+    return modes, modes_dt
