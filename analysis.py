@@ -732,27 +732,57 @@ class GetDriftErrors(Routine):
         store.set(self.outputs.get('drift'), results)
 
 
-class AnalyzeMF(Routine):
+class AnalyzeLiveMF(Routine):
     def __init__(self, **params):
+        """This routine looks at the mid-frequency and perform a 
+        high-freq like analysis to get the pickle parameter MFE"""
         self._params = params
         self._midFreqFilter = params.get("midFreqFilter", None)
         self._output_key = params.get("output_key", None)
 
     def execute(self, store):
+        tod = store.get(self.inputs.get('tod'))
+        nsamps = tod.nsamps
+
+        live = store.get(self.inputs.get('dets'))['live_final']
+
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
+        nmodes = self._nmodes
+
         # get the frequency range to work on
         n_l = int(self._midFreqFilter[0]/df)
         n_h = int(self._midFreqFilter[1]/df)
 
-        # perform a high frequency like analysis on this range
-        MFE = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, nmodes = par["MFEModes"], 
-                           highOrder = False, preSel = self.preLiveSel)
-        
+        # get drift errors
+        ndets = len(live)
+        hf_data = fdata[live, n_l:n_h]
+
+        # remove first [nmodes] common modes
+        if nmodes > 0:
+            # find the correlation between different detectors
+            c = np.dot(hf_data, hf_data.T.conjugate())
+
+            # find the first few common modes in the detectors and
+            # deproject them
+            u, w, v = np.linalg.svd(c, full_matrices = 0)
+            kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
+            modes = np.dot(kernel, hf_data)
+            coeff = np.dot(modes, hf_data.T.conj())
+            hf_data -= np.dot(coeff.T.conj(), modes)
+
+        # compute the rms for the detectors
+        rms = np.zeros(ndets)
+        rms[live] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
+
         results = {
-            "MFELive": MFE
+            "MFELive": rms
         }
 
-        store.set(self._output_key, results)
-
+        store.set(self.outputs.get('drift'), results)
 
 class AnalyzeHF(Routine):
     def __init__(self, **params):

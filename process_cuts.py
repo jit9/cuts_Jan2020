@@ -3,7 +3,9 @@ from todloop.tod import TODLoader
 
 from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
-from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors
+
+from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
+                     AnalyzeLiveMF
 
 # initialize the pipeline
 loop = TODLoop()
@@ -243,6 +245,20 @@ de_params = {
     'DEModes': 3,
 }
 loop.add_routine(GetDriftErrors(**de_params))
+
+mf_params = {
+    'inputs': {
+        'tod': 'tod',
+        'fft': 'fft_data',
+        'dets': 'dets',
+        'scan': 'scan_params',
+    },
+    'outputs': {
+        'mf_live': 'mf_live'
+    },
+    'midFreqFilter': [0.3, 1.0],
+}
+loop.add_routine(AnalyzeLiveMF(**mf_params))
 
 # run pipeline
 loop.run(100,101)
