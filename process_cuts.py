@@ -3,8 +3,7 @@ from todloop.tod import TODLoader
 
 from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
-from analysis import AnalyzeScan
-
+from analysis import AnalyzeScan, AnalyzeDarkLF
 
 # initialize the pipeline
 loop = TODLoop()

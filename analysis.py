@@ -7,7 +7,7 @@ import moby2
 from todloop import Routine
 
 from utils import *
-
+import pdb
 
 class AnalyzeScan(Routine):
     def __init__(self, **params):
@@ -42,7 +42,7 @@ class AnalyzeScan(Routine):
             'scan_freq': scan_freq
         }
         
-        self.logger.info(scan_params)
+        self.logger.debug(scan_params)
         store.set(self.outputs.get('scan'), scan_params)
 
     def analyze_scan(self, az, dt=0.002508, N=50, vlim=0.01, qlim=0.01):
@@ -203,7 +203,7 @@ class AnalyzeTemperature(Routine):
             'temperatureCut': temperatureCut
         }
         
-        self.logger.info(thermal_results)
+        self.logger.debug(thermal_results)
         store.set(self._output_key, thermal_results)
 
 
@@ -218,6 +218,7 @@ class AnalyzeDarkLF(Routine):
         self._output_key = params.get('output_key', None)
         self._scan = params.get('scan', None)
         self._freqRange = params.get('freqRange', None)
+        self._double_mode = params.get('doubleMode', False)
         self._params = params
 
     def execute(self, store):
@@ -272,19 +273,20 @@ class AnalyzeDarkLF(Routine):
         # [S S U S S U S U S U] with S means selected as good and
         # u means unselected (bad). Here we want to count the number
         # of "votes" saying this detector is good
-        psel = np.sum(psel, axis=0)
+        spsel = np.sum(psel, axis=0)
 
         # get the highest amount of score that the detectors receive
         # and use this as a threshold to judge the rest of the
         # detectors
-        Nmax = psel.max()
+        Nmax = spsel.max()
 
         # For any detectors who are "voted" as good more than half
         # of the maximum "votes" will be selected as good
-        psel50 = psel >= Nmax/2.
+        psel50 = spsel >= Nmax/2.
 
         # Normalize gain by the average gain of a good selection of
         # detectors, here this selection is given by psel50 AND presel
+        # loop over the frequency windows and normalize respectively
         for g, s in zip(gain, psel):
             g /= np.mean(g[psel50*s])
             
@@ -312,7 +314,9 @@ class AnalyzeDarkLF(Routine):
         results["gainDark"] = mgain_mean.data
         results["normDark"] = mnorm_mean.data
         results["darkSel"] = psel50.copy()  # not sure why copy is needed
-        store.set(self._output_key, results)
+
+        # save to the data store
+        store.set(self.outputs.get('lf_dark'), results)
         
     def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq):
         """Find correlations and gains to the main common mode over a
@@ -357,12 +361,12 @@ class AnalyzeDarkLF(Routine):
         preSel = sel.copy()
         
         # Get Correlations
-        u, s, v = np.linalg.svd(lf_data[sl], full_matrices=False )
+        u, s, v = np.linalg.svd(lf_data, full_matrices=False)
         corr = np.zeros(ndet)
-        if par.get("doubleMode", False):
-            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
+        if self._double_mode:
+            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm
         else:
-            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm[sl]
+            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm
 
         # Get Gains
         # data = CM * gain
@@ -370,7 +374,6 @@ class AnalyzeDarkLF(Routine):
         gain[preSel] = np.abs(u[:, 0])
         res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
                     "cc": cc, "normSel": normSel})
-        
         return res
 
 

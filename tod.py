@@ -183,7 +183,7 @@ class GetDetectors(Routine):
             'live_final': live,
             'dark_final': dark
         }
-        self.logger.info(detectors)
+        self.logger.debug(detectors)
         store.set(self.outputs.get('dets'), detectors)
 
     def get_detector_params(self):
