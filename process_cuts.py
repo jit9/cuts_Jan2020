@@ -1,9 +1,10 @@
 from todloop import TODLoop
 from todloop.tod import TODLoader
 
-from cuts import *
-from analysis import *
-from tod import *
+from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
+from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
+from analysis import AnalyzeScan
+
 
 # initialize the pipeline
 loop = TODLoop()
@@ -69,8 +70,9 @@ partial_params = {
     },
     'outputs': {
         'tod': 'tod',        
-    },    
+    },
     'tag_partial': 'pa3_f90_s16_c10_v1_partial',
+    'include_mce': True,
     'force_partial': False,
     'glitchp': { 'nSig': 10., 'tGlitch' : 0.007, 'minSeparation': 30, \
                  'maxGlitch': 50000, 'highPassFc': 6.0, 'buffer': 200 },
@@ -104,20 +106,6 @@ scan_params = {
     }
 }
 loop.add_routine(AnalyzeScan(**scan_params))
-
-# add a routine to analyze the thermal properties of TOD
-thermal_params = {
-    'inputs': {
-        'tod': 'tod'
-    },
-    'outputs': {
-        'thermal': 'thermal_results',
-    },
-    'channel': None,
-    'T_max': 0.10,
-    'dT_max': 0.0015, 
-}
-loop.add_routine(AnalyzeTemperature(**thermal_params))
 
 # add a routine to get the relevant detectors to look at
 BASE_DIR = '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/' 
@@ -199,16 +187,10 @@ lf_dark_params = {
     'outputs': {
         'lf_dark': 'lf_dark',
     },
-    'presel': {
-        'method': 'median',
-        'minSel': 0,
-        'initCorr': 0.9,
-    },
-    'useTaper': False,
     'cancelSync': False,
     'doubleMode': False,
     'freqRange': {
-        'fmin': 0.017,
+        'fmin': 0.017,          
         'fshift': 0.009,
         'band': 0.071,
         'Nwin': 1,
@@ -227,15 +209,6 @@ lf_live_params = {
     'outputs': {
         'lf_live': 'lf_live',
     }, 
-    'presel': {
-        'method': 'groups',
-        'Nmin': 20,
-        'initCorr': 0.98,
-        'minCorr': 0.75,
-        'groupCorr': 0.93,
-        'normLimit': 1e9,
-    },
-    'useTaper': False,
     'cancelSync': True,
     'doubleMode': False,
     'removeDark': True,

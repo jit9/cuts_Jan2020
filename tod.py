@@ -10,12 +10,14 @@ from utils import *
 class FouriorTransform(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._input_key = params.get('input_key', None)
         self._output_key = params.get('output_key', None)
         self._fft_data = params.get('fft_data', None)
 
     def execute(self, store):
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # first de-trend tod 
         trend = moby2.tod.detrend_tod(tod)
@@ -38,16 +40,16 @@ class FouriorTransform(Routine):
         }
 
         # store data into data store
-        store.set(self._output_key, tod)
-        store.set(self._fft_data, fft_data)
+        store.set(self.outputs.get('tod'), tod)
+        store.set(self.outputs.get('fft'), fft_data)
 
 
 class TransformTOD(Routine):
     def __init__(self, **params):
         """This routine transforms a series of tod data transformation
         such as downsampling, remove_mean and detrend"""
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._remove_mean = params.get('remove_mean', True)
         self._remove_median = params.get('remove_mediam', False)
         self._detrend = params.get('detrend', True)
@@ -56,7 +58,7 @@ class TransformTOD(Routine):
 
     def execute(self, store):
         # retrieve tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # remove mean or remove median
         if self._remove_mean:
@@ -77,14 +79,14 @@ class TransformTOD(Routine):
             tod = tod.copy(resample=2**self._n_downsample, resample_offset=1)
             self.logger.info("Downsampling done")
 
-        store.set(self._output_key, tod)
+        store.set(self.outputs.get('tod'), tod)
 
 
 class GetDetectors(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._fullRMSlim = params.get('fullRMSlim', 1e8)
         self._source = params.get('source', None)
         self._filename = params.get('filename', None)
@@ -95,7 +97,7 @@ class GetDetectors(Routine):
 
     def execute(self, store):
         # get tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # get all detector lists
         # directly copied from loic, not sure why copy is needed here
@@ -178,7 +180,7 @@ class GetDetectors(Routine):
             'dark_final': dark
         }
         self.logger.info(detectors)
-        store.set(self._output_key, detectors)
+        store.set(self.outputs.get('dets'), detectors)
 
     def get_detector_params(self):
         source = self._source
@@ -219,17 +221,15 @@ class GetDetectors(Routine):
 class CalibrateTOD(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._dets_key = params.get('dets_key', None)
-        self._output_key = params.get('output_key', None)
-        self._output_calData = params.get('output_calData', "calData")
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._flatfield = params.get('flatfield', None)
         self._forceNoResp = params.get('forceNoResp', None)
         self._config = params.get('config', None)
         self._calibrateTOD = params.get('calibrateTOD', True)
 
     def execute(self, store):
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         #####################################################
         # get responsivities and flatfield for calibration  #
@@ -289,7 +289,7 @@ class CalibrateTOD(Routine):
         cal = calData['cal']
         
         # apply to all except for original dark detectors        
-        orig_dark = store.get(self._dets_key)['dark_candidates']
+        orig_dark = store.get(self.inputs.get('dets'))['dark_candidates']
         s = ~orig_dark
         
         if not self._calibrateTOD:
@@ -298,13 +298,14 @@ class CalibrateTOD(Routine):
                                               cal[s].astype('float32'))
             # mark tod as calibrated
             calData['calibrated'] = True
-            
+
         # report error if calibration is unsuccessful
         if not(np.any(calData["calSel"])): 
             self.logger.error('moby', 0, "ERROR: no calibration for this TOD") 
             return 1
 
         # save to data store
-        store.set(self._output_calData, calData)
-        store.set(self._output_key, tod)
+        store.set(self.outputs.get('cal'), calData)
+        store.set(self.outputs.get('tod'), tod)        
+
         

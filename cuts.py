@@ -13,8 +13,11 @@ class CutSources(Routine):
     def __init__(self, **params):
         """A routine that cuts the point sources"""
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        # retrieve the inputs and outputs keys from data store
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
+
+        # retrieve other parameters
         self._tag_source = params.get('tag_source', None)
         self._source_list = params.get('source_list', None)
         self._no_noise = params.get('no_noise', True)
@@ -24,13 +27,14 @@ class CutSources(Routine):
         self._depot_path = params.get('depot', None)
 
     def initialize(self):
+        # get the depot
         self._depot = moby2.util.Depot(self._depot_path)
         user_config = moby2.util.get_user_config()
         moby2.pointing.set_bulletin_A(params=user_config.get('bulletin_A_settings'))
 
     def execute(self, store):
         # retrieve tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
         
         # check if source cut results exist
         sourceResult = os.path.exists(
@@ -102,15 +106,15 @@ class CutSources(Routine):
             #                    force=True, tod=tod, make_dirs=True)
 
         # pass the processed tod back to data store
-        store.set(self._output_key, tod)
+        store.set(self.outputs.get('tod'), tod)
 
 
 class CutPlanets(Routine):
     def __init__(self, **params):
         """A routine that perform the planet cuts"""
-        Routine.__init__(self)        
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._no_noise = params.get('no_noise', True)
         self._tag_planet = params.get('tag_planet', None)
         self._pointing_par = params.get('pointing_par', None)
@@ -120,9 +124,11 @@ class CutPlanets(Routine):
 
     def initialize(self):
         self._depot = moby2.util.Depot(self._depot_path)
+        user_config = moby2.util.get_user_config()
+        moby2.pointing.set_bulletin_A(params=user_config.get('bulletin_A_settings'))
         
     def execute(self, store):
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # check if planetCuts exist
         planetResult = os.path.exists(
@@ -185,15 +191,15 @@ class CutPlanets(Routine):
         moby2.tod.fill_cuts(tod, pos_cuts_planets, no_noise=self._no_noise)
 
         # pass the processed tod back to data store
-        store.set(self._output_key, tod)
+        store.set(self.outputs.get('tod'), tod)
 
 
 class RemoveSyncPickup(Routine):
     def __init__(self, **params):
         """This routine fit / removes synchronous pickup"""
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._remove_sync = params.get('remove_sync', False)
         self._force_sync = params.get('force_sync', False)
         self._tag_sync = params.get('tag_sync', None)
@@ -204,7 +210,7 @@ class RemoveSyncPickup(Routine):
 
     def execute(self, store):
         # retrieve tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # Check for existing results, to set what operations must be
         # done/redone.
@@ -241,15 +247,15 @@ class RemoveSyncPickup(Routine):
             del ss
 
         # pass the processed tod back to data store
-        store.set(self._output_key, tod)
+        store.set(self.outputs.get('tod'), tod)
 
 
 class CutPartial(Routine):
     def __init__(self, **params):
         """A routine that performs the partial cuts"""
-        Routine.__init__(self)        
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._tag_partial = params.get('tag_partial', None)
         self._force_partial = params.get('force_partial', False)
         self._glitchp = params.get('glitchp', {})
@@ -262,7 +268,7 @@ class CutPartial(Routine):
 
     def execute(self, store):
         # retrieve tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # check if partial results already exist
         partial_result = os.path.exists(
@@ -307,7 +313,7 @@ class CutPartial(Routine):
         tod.cuts = cuts_partial
 
         # pass the tod back to the store
-        store.set(self._output_key, tod)
+        store.set(self.outputs.get('tod'), tod)
 
 
 class SubstractHWP(Routine):
@@ -324,9 +330,9 @@ class SubstractHWP(Routine):
 
     def execute(self, store):
         # retrieve tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
-        self.logger.info("Substract HWP signal")
+        selfstore):.logger.info("Substract HWP signal")
 
         # retrieve hwp_modes object from depot
         hwp_modes = self._depot.read_object(
@@ -345,21 +351,19 @@ class SubstractHWP(Routine):
         tod.data[hwp_modes.det_uid, :] -= hwp_signal
 
         # pass the tod to the data store
-        store.set(self._output_key, tod)
-
-
+        store.set(self.outputs.get('tod'), tod)
 
 
 class FindJumps(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._dsStep = params.get('dsStep', None)
         self._window = params.get('window', None)
 
     def execute(self, store):
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # find jumps
         jumps = moby2.libactpol.find_jumps(tod.data,
@@ -372,5 +376,5 @@ class FindJumps(Routine):
         }
         
         # save to data store
-        store.set(self._output_key, crit)
+        store.set(self.outputs.get('jumps'), crit)
     

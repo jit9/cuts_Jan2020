@@ -13,13 +13,14 @@ class AnalyzeScan(Routine):
     def __init__(self, **params):
         """This routine analyzes the scan pattern"""
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._output_key = params.get('output_key', None)
         self._scan_params = params.get('scan_param', {})
 
     def execute(self, store):
         # load tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         sample_time = (tod.ctime[-1] - tod.ctime[0]) / (tod.ctime.shape[0]-1)
         # analyze scan and save result into a dictionary
@@ -42,7 +43,7 @@ class AnalyzeScan(Routine):
         }
         
         self.logger.info(scan_params)
-        store.set(self._output_key, scan_params)
+        store.set(self.outputs.get('scan'), scan_params)
 
     def analyze_scan(self, az, dt=0.002508, N=50, vlim=0.01, qlim=0.01):
         """Find scan parameters and cuts"""
