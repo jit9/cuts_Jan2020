@@ -5,7 +5,7 @@ from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
 
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
-                     AnalyzeLiveMF
+                     AnalyzeLiveMF, AnalyzeHF
 
 # initialize the pipeline
 loop = TODLoop()
@@ -259,7 +259,24 @@ mf_params = {
     'midFreqFilter': [0.3, 1.0],
     'nmodes': 8,
 }
-loop.add_routine(AnalyzeLiveMF(**mf_params))
+loop.add_routine(AnalyzeMF(**mf_params))
 
+hf_params = {
+    'inputs': {
+        'tod': 'tod',
+        'fft': 'fft_data',
+        'dets': 'dets',
+        'scan': 'scan_params',
+    },
+    'outputs': {
+        'hf_live': 'hf_live'
+    },
+    'getPartial': True,
+    'highFreqFilter': [9.0, 19.0],
+    'nLiveModes': 10,
+    'nDarkModes': 3,
+    'highOrder': True,
+}
+loop.add_routine()
 # run pipeline
 loop.run(100,101)

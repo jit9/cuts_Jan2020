@@ -790,54 +790,140 @@ class AnalyzeLiveMF(Routine):
 
 class AnalyzeHF(Routine):
     def __init__(self, **params):
+        """This routine analyzes both live and dark detectors in
+        the high frequency band"""
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
+        self._getPartial = params.get('getPartial', False)
+        self._highFreqFilter = params.get('highFreqFilter', None)
+        self._nmodes_live = params.get('nLiveModes', 1)
+        self._nmodes_dark = params.get('nDarkModes', 1)
+        self._highOrder = params.get('highOrder', False)
         self._params = params
 
     def execute(self, store):
+        # load relevant data from the data store
+        tod = store.get(self.inputs.get('tod'))
+        nsamps = tod.nsamps
+        ndets = len(tod.info.det_uid)
+
+        live = store.get(self.inputs.get('dets'))['live_final']
+
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+
+        scan = store.get(self.inputs.get('scan'))
+        nmodes_live = self._nmodes_live
+        nmodes_dark = self._nmodes_dark
+
         # get the range of frequencies to work with
-        n_l = int(round(par["highFreqFilter"][0]/df))
-        n_h = int(round(par["highFreqFilter"][1]/df))
+        n_l = int(round(self._highFreqFilter[0]/df))
+        n_h = int(round(self._highFreqFilter[1]/df))
+
         # make sure that n_h is a number that's optimized in fft
         n_h = nextregular(n_h-n_l) + n_l
 
+        # empty dictionary to store the results
+        results = {}
+
         # if partial is labeled the analysis will be carried out
         # for each individual scan between the turnning points
-        if not(par["getPartial"]):
-            rms, skewt, kurtt = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, 
-                                           nmodes=par["HFLiveModes"], 
-                                           highOrder=True, preSel = self.preLiveSel)
+        if not(self._getPartial):
+            rms, skewt, kurtt = self.highFreqAnal(fdata, live, [n_l,n_h], nsamps,
+                                                  highOrder=self._highOrder,
+                                                  nmodes=nmodes_live)
         else:
-            rms, skewt, kurtt, prms, pskewt, pkurtt=highFreqAnal(fdata, live, 
-                                           [n_l,n_h], self.ndata, nmodes = par["HFLiveModes"], 
-                                           highOrder=True, preSel=self.preLiveSel, 
-                                           scanParams=self.scan)
+            rms, skewt, kurtt, prms, pskewt, pkurtt = self.highFreqAnal(fdata, live, 
+                                                                        [n_l,n_h],
+                                                                        nsamps,
+                                                                        nmodes=nmodes_live,
+                                                                        highOrder=self._highOrder,
+                                                                        scanParams=scan)
 
             # store the statistics for partial
-            results = {}
-            results["partialRMSLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
-            results["partialSKEWLive"] = np.zeros([self.ndet,self.chunkParams["N"]]) 
-            results["partialKURTLive"] = np.zeros([self.ndet,self.chunkParams["N"]]) 
-            results["partialSKEWPLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
-            results["partialKURTPLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
+            results["partialRMSLive"] = np.zeros([ndets, scan["N"]])
+            results["partialSKEWLive"] = np.zeros([ndets, scan["N"]]) 
+            results["partialKURTLive"] = np.zeros([ndets, scan["N"]]) 
+            results["partialSKEWPLive"] = np.zeros([ndets, scan["N"]])
+            results["partialKURTPLive"] = np.zeros([ndets, scan["N"]])
+
             results["partialRMSLive"][live] =  prms
-            results["partialSKEWLive"][live] = pskewt.T[:,0]
-            results["partialKURTLive"][live] = pkurtt.T[:,0]
-            results["partialSKEWPLive"][live] = pskewt.T[:,1]
-            results["partialKURTPLive"][live] = pkurtt.T[:,1]
+            results["partialSKEWLive"][live] = pskewt.T[:, 0]
+            results["partialKURTLive"][live] = pkurtt.T[:, 0]
+            results["partialSKEWPLive"][live] = pskewt.T[:, 1]
+            results["partialKURTPLive"][live] = pkurtt.T[:, 1]
             
         # store the statistics for global
         results["rmsLive"] = rms
-        results["skewLive"] = np.zeros(self.ndet)
-        results["kurtLive"] = np.zeros(self.ndet)
-        results["skewpLive"] = np.zeros(self.ndet)
-        results["kurtpLive"] = np.zeros(self.ndet)
+        results["skewLive"] = np.zeros(ndets)
+        results["kurtLive"] = np.zeros(ndets)
+        results["skewpLive"] = np.zeros(ndets)
+        results["kurtpLive"] = np.zeros(ndets)
         results["skewLive"][live] = skewt[0]
         results["kurtLive"][live] = kurtt[0]
         results["skewpLive"][live] = skewt[1]
-        results["kurtpLive"][live] = kurtt[1]        
+        results["kurtpLive"][live] = kurtt[1]
 
         # analyze the dark detectors for the same frequency range
-        rms = highFreqAnal(fdata, dark, [n_l,n_h], self.ndata, nmodes = par["HFDarkModes"], 
-                             highOrder = False, preSel = self.preDarkSel)
+        rms = self.highFreqAnal(fdata, dark, [n_l,n_h], nsamps, nmodes=nmodes_dark, 
+                                highOrder=False)
+
         results["rmsDark"] = rms
 
+        store.set(self.outputs.get('hf_live'), results)
 
+    def highFreqAnal(self, fdata, sel, frange, nsamps, nmodes=0, highOrder=False,
+                     scanParams=None):
+        """
+        @brief Find noise RMS, skewness and kurtosis over a frequency band
+        """
+        ndet = len(sel)
+
+        # get the high frequency fourior modes
+        hf_data = fdata[sel, frange[0]:frange[1]]
+
+        if nmodes > 0:
+            # find the correlation between different detectors
+            c = np.dot(hf_data,hf_data.T.conjugate())
+
+            # find the first few common modes in the detectors and
+            # deproject them
+            u, w, v = np.linalg.svd(c, full_matrices = 0)
+            kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
+            modes = np.dot(kernel,hf_data)
+            coeff = np.dot(modes,hf_data.T.conj())
+            hf_data -= np.dot(coeff.T.conj(),modes)
+
+        # compute the rms for the detectors
+        rms = np.zeros(ndet)
+        rms[sel] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
+
+        # if we are interested in high order effects, skew and kurtosis will
+        # be calculated here
+        if highOrder:
+            hfd, _ = get_time_domain_modes( hf_data, 1, nsamps)
+            skewt = stat.skewtest(hfd,axis=1)
+            kurtt = stat.kurtosistest(hfd,axis=1)
+            if scanParams is not None:
+                T = scanParams["T"]
+                pivot = scanParams["pivot"]
+                N = scanParams["N"]
+                f = float(hfd.shape[1])/nsamps
+                t = int(T*f); p = int(pivot*f)
+                prms = []; pskewt = []; pkurtt = []
+                for c in xrange(N):
+                    # i see this as calculating the statistics for each
+                    # swing (no turning part) so the statistics is not
+                    # affected by the scan
+                    prms.append(hfd[:,c*t+p:(c+1)*t+p].std(axis=1))
+                    pskewt.append(stat.skewtest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
+                    pkurtt.append(stat.kurtosistest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
+                prms = np.array(prms).T
+                pskewt = np.array(pskewt)
+                pkurtt = np.array(pkurtt)
+                return (rms, skewt, kurtt, prms, pskewt, pkurtt)
+            else:
+                return (rms, skewt, kurtt)
+        else:
+            return rms        
