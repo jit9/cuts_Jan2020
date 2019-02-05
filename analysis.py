@@ -2,12 +2,12 @@ import numpy as np
 from numpy import ma
 import scipy.stats.mstats as ms
 from scipy.cluster.vq import kmeans2
+import logging
 
 import moby2
 from todloop import Routine
 
 from utils import *
-import pdb
 
 class AnalyzeScan(Routine):
     def __init__(self, **params):
@@ -17,6 +17,7 @@ class AnalyzeScan(Routine):
         self.outputs = params.get('outputs', None)
         self._output_key = params.get('output_key', None)
         self._scan_params = params.get('scan_param', {})
+        # self.logger.setLevel(logging.DEBUG)
 
     def execute(self, store):
         # load tod
