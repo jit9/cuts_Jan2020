@@ -381,16 +381,14 @@ class AnalyzeDarkLF(Routine):
 class AnalyzeLiveLF(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
-        self._dets = params.get('dets', None)
-        self._fft_data = params.get('fft_data', None)
-        self._tod = params.get('tod', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = paramsg.et('outputs', None)
         self._output_key = params.get('output_key', None)
-        self._scan = params.get('scan', None)
         self._freqRange = params.get('freqRange', None)
         self._separateFreqs = params.get('separateFreqs', False)
-        self._dark = params.get('dark_results', None)
         self._full = params.get('fullReport', False)
         self._removeDark = params.get('removeDark', False)
+        self._darkModesParams = param.get('darkModesParams', {})
         self._params = params
 
     def execute(self, store):
@@ -398,14 +396,17 @@ class AnalyzeLiveLF(Routine):
         # the AnalyzeDarkLF
         
         # retrieve relevant data from store
-        tod = store.get(self._tod)
-        live = store.get(self._dets)['live_final']
+        tod = store.get(self.inputs.get('tod'))
         ndets = len(tod.info.det_uid)
-        fdata = store.get(self._fft_data)['fdata']
-        df = store.get(self._fft_data)['df']
-        nf = store.get(self._fft_data)['nf']
-        scan_freq = store.get(self._scan)['scan_freq']
-        darkSel = store.get(self._dark)['darkSel']
+        
+        live = store.get(self.inputs.get('dets'))['live_final']
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+        nf = fft_data['nf']
+
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
+        darkSel = store.get(self.inputs.get('dark'))['darkSel']
         
         # empty list to store the detectors for each frequency bands if
         # that's what we want, or otherwise we will store all detectors here
@@ -546,11 +547,6 @@ class AnalyzeLiveLF(Routine):
         ndet = len(sel)
         res = {}
 
-        # Apply sine^2 taper to data
-        if self._params.get("useTaper", False):
-            taper = get_sine2_taper(frange, edge_factor = 6)
-            lf_data *= np.repeat([taper],len(lf_data),axis=0)
-
         # Deproject correlated modes
         if fcmodes is not None:
             data_norm = np.linalg.norm(lf_data,axis=1)
@@ -656,7 +652,7 @@ class AnalyzeLiveLF(Routine):
         
         return res
 
-    def getDarkModes(self, fdata, darkSel, frange, df, nf, nsamps, par, tod = None):
+    def getDarkModes(self, fdata, darkSel, frange, df, nf, nsamps):
         """
         @brief Get dark or thermal modes from dark detectors and thermometer
                data.
@@ -667,38 +663,18 @@ class AnalyzeLiveLF(Routine):
         fc_inputs = []
 
         # Dark detector drift
-        if par["darkModesParams"].get("useDarks", False):
+        if self._darkModesParams.get("useDarks", False):
             dark_signal = fdata[darkSel,n_l:n_h].copy()
             fc_inputs.extend(list(dark_signal))
 
-        # TEST CRYOSTAT TEMPERATURE
-        if par["darkModesParams"].get("useTherm", False):
-            thermometers = []
-            for channel in par['thermParams']['channel']:
-                # gather thermometer data
-                thermometer = tod.get_hk( channel, fix_gaps=True)
-                if len(np.diff(thermometer).nonzero()[0]) > 0:
-                    thermometers.append(thermometer)
-                    
-            # perform a fourior analysis on thermometer data
-            # and append to the dark detector data
-            if len(thermometers) > 0:
-                thermometers = np.array(thermometers)
-                fth = np.fft.rfft( thermometers, nf )[:,n_l:n_h]
-                fc_inputs.extend(list(fth))
-
         fc_inputs = np.array(fc_inputs)
-
-        if par.get("useTaper",False):
-            taper = get_sine2_taper(frange, edge_factor = 6)
-            fc_inputs *= np.repeat([taper],len(fc_inputs),axis=0)
 
         # Normalize modes
         fc_inputs /= np.linalg.norm(fc_inputs, axis=1)[:, np.newaxis]
 
         # Obtain main svd modes to deproject from data
-        if par["darkModesParams"].get("useSVD", False):
-            Nmodes = par["darkModesParams"].get("Nmodes", None)
+        if self._darkModesParams.get("useSVD", False):
+            Nmodes = self._darkModesParams.get("Nmodes", None)
             u, s, v = np.linalg.svd( fc_inputs, full_matrices=False )
             if Nmodes is None:
                 # drop the bottom 10%
