@@ -5,51 +5,56 @@ from cuts import *
 from analysis import *
 from tod import *
 
+# initialize the pipeline
 loop = TODLoop()
 
+# specify the list of tods to go through
 loop.add_tod_list('/home/lmaurin/TODLists/2016_ar3_season_nohwp.txt')
 
-loop.add_routine(TODLoader(output_key="tod", repair_pointing=False))
+# add routines to the pipeline
 
-# I included all the parameters here but actually I don't need this
-# much because all of the cuts have been generated before so I will
-# only need to know the tag to retrieve it in principle.
-source_params = {
-    'input_key': 'tod',
+# add a routine to load tod
+loader_params = {
     'output_key': 'tod',
+    'repair_pointing': False
+}
+loop.add_routine(TODLoader(**loader_params))
+
+# add a routine to cut the sources
+source_params = {
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'tod': 'tod'
+    },
     'tag_source': 'pa3_f90_s16_c10_v1_source',
     'no_noise': True,
-    'pointing_par': {
-        'source': 'fp_file', 
-        'filename': '/data/actpol/actpol_data_shared/RelativeOffsets/' + 
-        'template_ar3_s16_170131.txt'
-    },
-    'source_list': '/data/actpol/actpol_data_shared/BrightSources/sources.txt', 
-    'mask_params': { 
-        'radius': (3./60)  # degrees
-    },
-    'mask_shift_generator': {
-        'source': 'file',
-        'filename': '/data/actpol/actpol_data_shared/TODOffsets/' + 
-                    'tod_offsets_2016_170131.txt',
-        'columns': [0, 3, 4],
-        'rescale_degrees': 1./60
-    },
     'depot': '/data/actpol/depot'
 }
 loop.add_routine(CutSources(**source_params))
 
+# add a routine to cut the planets
 planets_params = {
-    'input_key': 'tod',
-    'output_key': 'tod',
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'tod': 'tod',        
+    },
     'tag_planet': 'pa3_f90_s16_c10_v1_planet',
     'depot': '/data/actpol/depot',
 }
 loop.add_routine(CutPlanets(**planets_params))
 
+# add a routine to remove the sync pick up
 sync_params = {
-    'input_key': 'tod',
-    'output_key': 'tod',
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'tod': 'tod',        
+    },
     'tag_sync': 'pa3_f90_s16_c10_v1',
     'remove_sync': False,
     'force_sync': False,
@@ -57,26 +62,31 @@ sync_params = {
 }
 loop.add_routine(RemoveSyncPickup(**sync_params))
 
+# add a routine to cut the glitches
 partial_params = {
-    'input_key': 'tod',
-    'output_key': 'tod',
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'tod': 'tod',        
+    },    
     'tag_partial': 'pa3_f90_s16_c10_v1_partial',
     'force_partial': False,
     'glitchp': { 'nSig': 10., 'tGlitch' : 0.007, 'minSeparation': 30, \
                  'maxGlitch': 50000, 'highPassFc': 6.0, 'buffer': 200 },
     'depot': '/data/actpol/depot',
 }
+
 loop.add_routine(CutPartial(**partial_params))
 
-# hwp is not needed here, just added in for completeness
-# hwp_params = {
-#     'input_key': 'tod',
-#     'output_key': 'tod',
-#     'substract_hwp': False,
-# }
-# loop.add_routine(SubstractHWP(**hwp_params))
-
+# add a routine to transform the TODs
 transform_params = {
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'tod': 'tod',        
+    },
     'remove_mean': False,
     'remove_median': True,
     'detrend': False,
@@ -84,25 +94,40 @@ transform_params = {
 }
 loop.add_routine(TransformTOD(**transform_params))
 
+# add a routine to analyze the scan
 scan_params = {
-    'input_key': 'tod',
-    'output_key': 'scan_params',
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'scan': 'scan_params',        
+    }
 }
 loop.add_routine(AnalyzeScan(**scan_params))
 
+# add a routine to analyze the thermal properties of TOD
 thermal_params = {
-    'input_key': 'tod',
-    'output_key': 'thermal_results',
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'thermal': 'thermal_results',
+    },
     'channel': None,
     'T_max': 0.10,
     'dT_max': 0.0015, 
 }
 loop.add_routine(AnalyzeTemperature(**thermal_params))
 
+# add a routine to get the relevant detectors to look at
 BASE_DIR = '/data/actpol/actpol_data_shared/ArrayData/2016/ar3/' 
 gd_params = {
-    'input_key': 'tod',
-    'output_key': 'dets',
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'dets': 'dets',        
+    },
     'source': 'individual',
     'live': BASE_DIR + 'live_pa3_f90_s16_c10_v4.dict',
     'dark': BASE_DIR + 'dark.dict',
@@ -110,11 +135,17 @@ gd_params = {
 }
 loop.add_routine(GetDetectors(**gd_params))
 
+# add a routine to calibrate DAQ units to pW using flatfield and
+# responsivity
 cal_params = {
-    'input_key': 'tod',
-    'dets_key': 'dets',
-    'output_key': 'tod',
-    'output_calData': 'calData',
+    'inputs': {
+        'tod': 'tod',
+        'dets': 'dets',
+    },
+    'outputs': {
+        'tod': 'tod',
+        'cal': 'calData' 
+    },
     'flatfield': "/data/actpol/actpol_data_shared/FlatFields/2015/" + \
                  "ff_actpol3_2015_c9_w1_v2b_mix90-150_it9_actpol3_2015_c9_w2_photon_mix90-150_it7.dict",
     'config': [{
@@ -132,27 +163,42 @@ cal_params = {
 }
 loop.add_routine(CalibrateTOD(**cal_params))
 
+# add a routine to find jumps in TOD
 jump_params = {
-    'input_key': 'tod',
-    'output_key': 'crit_jumps',
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs':{
+        'jumps': 'crit_jumps'
+    },
     'dsStep': 4,
     'window': 1,
 }
 loop.add_routine(FindJumps(**jump_params))
 
+# add a routine to perform the fourior transform
 fft_params = {
-    'input_key': 'tod',
-    'output_key': 'tod',
-    'fft_data': 'fft_data'
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs': {
+        'tod': 'tod',
+        'fft': 'fft_data'
+    },            
 }
 loop.add_routine(FouriorTransform(**fft_params))
 
+# study the dark detectors using LF data
 lf_dark_params = {
-    'fft_data': 'fft_data',
-    'dets': 'dets',
-    'tod': 'tod',
-    'output_key': 'lf_dark',
-    'scan': 'scan_params',
+    'inputs': {
+        'tod': 'tod',
+        'fft': 'fft_data',
+        'dets': 'dets',
+        'scan': 'scan_params',
+    },
+    'outputs': {
+        'lf_dark': 'lf_dark',
+    },
     'presel': {
         'method': 'median',
         'minSel': 0,
@@ -170,11 +216,17 @@ lf_dark_params = {
 }
 loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
 
+# study the live detectors using LF data
 lf_live_params = {
-    'fft_data': 'fft_data',
-    'dets': 'dets',
-    'tod': 'tod',
-    'output_key': 'lf_live',
+    'inputs': {
+        'tod': 'tod',
+        'fft': 'fft_data',
+        'dets': 'dets',
+        'scan': 'scan_params',
+    },
+    'outputs': {
+        'lf_live': 'lf_live',
+    }, 
     'presel': {
         'method': 'groups',
         'Nmin': 20,
