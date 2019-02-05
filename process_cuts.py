@@ -177,27 +177,27 @@ fft_params = {
 }
 loop.add_routine(FouriorTransform(**fft_params))
 
-# # study the dark detectors using LF data
-# lf_dark_params = {
-#     'inputs': {
-#         'tod': 'tod',
-#         'fft': 'fft_data',
-#         'dets': 'dets',
-#         'scan': 'scan_params',
-#     },
-#     'outputs': {
-#         'lf_dark': 'lf_dark',
-#     },
-#     'cancelSync': False,
-#     'doubleMode': False,
-#     'freqRange': {
-#         'fmin': 0.017,          
-#         'fshift': 0.009,
-#         'band': 0.071,
-#         'Nwin': 1,
-#     },
-# }
-# loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
+# study the dark detectors using LF data
+lf_dark_params = {
+    'inputs': {
+        'tod': 'tod',
+        'fft': 'fft_data',
+        'dets': 'dets',
+        'scan': 'scan_params',
+    },
+    'outputs': {
+        'lf_dark': 'lf_dark',
+    },
+    'cancelSync': False,
+    'doubleMode': False,
+    'freqRange': {
+        'fmin': 0.017,          
+        'fshift': 0.009,
+        'band': 0.071,
+        'Nwin': 1,
+    },
+}
+loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
 
 # # study the live detectors using LF data
 # lf_live_params = {

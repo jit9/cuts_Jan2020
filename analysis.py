@@ -209,6 +209,9 @@ class AnalyzeTemperature(Routine):
 
 class AnalyzeDarkLF(Routine):
     def __init__(self, **params):
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._dets = params.get('dets', None)
         self._fft_data = params.get('fft_data', None)
         self._tod = params.get('tod', None)
@@ -219,12 +222,14 @@ class AnalyzeDarkLF(Routine):
 
     def execute(self, store):
         # retrieved relevant data from data store
-        tod = store.get(self._tod)
-        fft_data = store.get(self._fft_data)
+        tod = store.get(self.inputs.get('tod'))
+
+        fft_data = store.get(self.inputs.get('fft'))
         fdata = fft_data['fdata']
         df = fft_data['df']
-        sel = store.get(self._dets)['dark_final']
-        scan_freq = store.get(self._scan)['scan_freq']
+        
+        sel = store.get(self.inputs.get('dets'))['dark_final']
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
 
         # get the frequency band parameters
         frange = self._freqRange
@@ -318,11 +323,6 @@ class AnalyzeDarkLF(Routine):
         ndet = len(sel)
         res = {}
 
-        # Apply sine^2 taper to data
-        if self._params.get("useTaper", False):
-            taper = get_sine2_taper(frange, edge_factor = 6)
-            lf_data *= np.repeat([taper],len(lf_data),axis=0)
-
         # Scan frequency rejection
         if self._params.get("cancelSync",False) and (scan_freq/df > 7):
             i_harm = get_iharm(frange, df, scan_freq,
@@ -349,36 +349,12 @@ class AnalyzeDarkLF(Routine):
             nlim = [0, nlim]
         normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
         
-        # check which preselection is specified
-        presel_method = ppar.get("method", "median")
-        if presel_method is "median":
-            sl = presel_by_median(cc, sel=normSel[sel], **presel_params)
-            res["groups"] = None
-            
-        elif presel_method is "groups":
-            G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **presel_params)
-            sl = np.zeros(cc.shape[1], dtype=bool)
-            sl[ld] = True
-            res["groups"] = {
-                "G": G,
-                "ind": ind,
-                "ld": ld,
-                "smap": smap
-            }
-        else:
-            raise "ERROR: Unknown preselection method"
-
         # The number of sels are just overwhelmingly confusing
         # To clarify for myself,
         # - normSel: selects the detectors with good norm
         # - sel: the initial selection of detectors specified
         #        for this case it is selection of dark detectors
-        # - sl: is the preselected detectors from the median
-        #       or group methods
-        # Here it's trying to apply the preselection to the
-        # dark selection
         preSel = sel.copy()
-        preSel[sel] = sl
         
         # Get Correlations
         u, s, v = np.linalg.svd(lf_data[sl], full_matrices=False )
