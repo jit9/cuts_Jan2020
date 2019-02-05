@@ -198,29 +198,36 @@ lf_dark_params = {
 }
 loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
 
-# # study the live detectors using LF data
-# lf_live_params = {
-#     'inputs': {
-#         'tod': 'tod',
-#         'fft': 'fft_data',
-#         'dets': 'dets',
-#         'scan': 'scan_params',
-#     },
-#     'outputs': {
-#         'lf_live': 'lf_live',
-#     }, 
-#     'cancelSync': True,
-#     'doubleMode': False,
-#     'removeDark': True,
-#     'freqRange': {
-#         'fmin': 0.017,
-#         'fshift': 0.009,
-#         'band': 0.071,
-#         'Nwin': 10,
-#     },
-#     'separateFreqs': False,
-# }
-# loop.add_routine(AnalyzeLiveLF(**lf_live_params))
+# study the live detectors using LF data
+lf_live_params = {
+    'inputs': {
+        'tod': 'tod',
+        'fft': 'fft_data',
+        'dets': 'dets',
+        'scan': 'scan_params',
+        'dark': 'lf_dark'
+    },
+    'outputs': {
+        'lf_live': 'lf_live',
+    },
+    'cancelSync': True,
+    'doubleMode': False,
+    'removeDark': True,
+    'freqRange': {
+        'fmin': 0.017,
+        'fshift': 0.009,
+        'band': 0.071,
+        'Nwin': 10,
+    },
+    'separateFreqs': False,
+    'darkModesParams' : {
+        'useDarks': True,
+        'useSVD': True,
+        'Nmodes': 1,
+        'useTherm': False
+    },
+}
+loop.add_routine(AnalyzeLiveLF(**lf_live_params))
 
 # run pipeline
 loop.run(100,101)
