@@ -242,7 +242,7 @@ de_params = {
         'drift': 'drift',
     },
     'driftFilter': 0.036,
-    'DEModes': 3,
+    'nmodes': 3,
 }
 loop.add_routine(GetDriftErrors(**de_params))
 
@@ -257,6 +257,7 @@ mf_params = {
         'mf_live': 'mf_live'
     },
     'midFreqFilter': [0.3, 1.0],
+    'nmodes': 8,
 }
 loop.add_routine(AnalyzeLiveMF(**mf_params))
 

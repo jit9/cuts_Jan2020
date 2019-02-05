@@ -682,10 +682,11 @@ class GetDriftErrors(Routine):
     def __init__(self, **params):
         """This routine obtains the pickle parameter DELive by performing
         a high frequency analysis on the slow modes"""
+        Routine.__init__(self)
         self.inputs = params.get('inputs', None)
         self.outputs = params.get('outputs', None)
         self._driftFilter = params.get('driftFilter', None)
-        self._nmodes = params.get('DEModes', 1)
+        self._nmodes = params.get('nmodes', 1)
 
     def execute(self, store):
         tod = store.get(self.inputs.get('tod'))
@@ -736,9 +737,11 @@ class AnalyzeLiveMF(Routine):
     def __init__(self, **params):
         """This routine looks at the mid-frequency and perform a 
         high-freq like analysis to get the pickle parameter MFE"""
-        self._params = params
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._midFreqFilter = params.get("midFreqFilter", None)
-        self._output_key = params.get("output_key", None)
+        self._nmodes = params.get("nmodes", 1)
 
     def execute(self, store):
         tod = store.get(self.inputs.get('tod'))
@@ -783,6 +786,7 @@ class AnalyzeLiveMF(Routine):
         }
 
         store.set(self.outputs.get('drift'), results)
+
 
 class AnalyzeHF(Routine):
     def __init__(self, **params):
