@@ -9,6 +9,7 @@ from todloop import Routine
 
 from utils import *
 
+
 class AnalyzeScan(Routine):
     def __init__(self, **params):
         """This routine analyzes the scan pattern"""
@@ -675,89 +676,59 @@ class AnalyzeLiveLF(Routine):
             fcmodes, n_l, nsamps, df)
         cmodes /= np.linalg.norm(cmodes, axis=1)[:, np.newaxis]
         return fcmodes, cmodes, cmodes_dt
-
-
         
 
 class GetDriftErrors(Routine):
     def __init__(self, **params):
-        self._params = params
-        self._output_key = params.get('output_key', None)
-
+        """This routine obtains the pickle parameter DELive by performing
+        a high frequency analysis on the slow modes"""
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
+        self._driftFilter = params.get('driftFilter', None)
+        self._nmodes = params.get('DEModes', 1)
 
     def execute(self, store):
-        # Get Drift-Error
-        DE = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, nmodes = par["DEModes"], 
-                          highOrder=False, preSel=self.preLiveSel)
-        
+        tod = store.get(self.inputs.get('tod'))
+        nsamps = tod.nsamps
+
+        live = store.get(self.inputs.get('dets'))['live_final']
+
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']        
+
+        # find the range of frequencies of interests
+        n_l = 1
+        n_h = nextregular(int(round(self._driftFilter/df))) + 1
+
+        # get drift errors
+        ndets = len(live)
+        hf_data = fdata[sel, n_l:n_h]
+
+        # remove first [nmodes] common modes
+        if self._nmodes > 0:
+            # find the correlation between different detectors
+            c = np.dot(hf_data, hf_data.T.conjugate())
+
+            # find the first few common modes in the detectors and
+            # deproject them
+            u, w, v = np.linalg.svd(c, full_matrices = 0)
+            kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
+            modes = np.dot(kernel, hf_data)
+            coeff = np.dot(modes, hf_data.T.conj())
+            hf_data -= np.dot(coeff.T.conj(), modes)
+
+        # compute the rms for the detectors
+        rms = np.zeros(ndet)
+        rms[live] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
+
         results = {
-            "DELive": DE
+            "DELive": rms
         }
 
-        store.set(self._output_key, results)
-
-
-        
-def highFreqAnal(fdata, sel, range, nsamps,  
-                 nmodes=0, highOrder = False, preSel = None,
-                 scanParams = None):
-    """
-    @brief Find noise RMS, skewness and kurtosis over a frequency band
-    """
-    ndet = len(sel)
-
-    # get the high frequency fourior modes
-    hf_data = fdata[sel,range[0]:range[1]]
-    if nmodes > 0:
-        # see if there is anything preselected
-        if preSel is None:
-            preSel = np.ones(sel.sum(),dtype=bool)
-        else:
-            preSel = preSel[sel]
-
-        # find the correlation between different detectors
-        c = np.dot(hf_data[preSel],hf_data[preSel].T.conjugate())
-
-        # find the first few common modes in the detectors and
-        # deproject them
-        u, w, v = np.linalg.svd(c, full_matrices = 0)
-        kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
-        modes = np.dot(kernel,hf_data[preSel])
-        coeff = np.dot(modes,hf_data.T.conj())
-        hf_data -= np.dot(coeff.T.conj(),modes)
-
-    # compute the rms for the detectors
-    rms = np.zeros(ndet)
-    rms[sel] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
-
-    # if we are interested in high order effects, skew and kurtosis will
-    # be calculated here
-    if highOrder:
-        hfd, _ = get_time_domain_modes( hf_data, 1, nsamps)
-        skewt = stat.skewtest(hfd,axis=1)
-        kurtt = stat.kurtosistest(hfd,axis=1)
-        if scanParams is not None:
-            T = scanParams["T"]
-            pivot = scanParams["pivot"]
-            N = scanParams["N"]
-            f = float(hfd.shape[1])/nsamps
-            t = int(T*f); p = int(pivot*f)
-            prms = []; pskewt = []; pkurtt = []
-            for c in xrange(N):
-                # i see this as calculating the statistics for each
-                # swing (no turning part) so the statistics is not
-                # affected by the scan
-                prms.append(hfd[:,c*t+p:(c+1)*t+p].std(axis=1))
-                pskewt.append(stat.skewtest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
-                pkurtt.append(stat.kurtosistest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
-            prms = np.array(prms).T
-            pskewt = np.array(pskewt)
-            pkurtt = np.array(pkurtt)
-            return (rms, skewt, kurtt, prms, pskewt, pkurtt)
-        else:
-            return (rms, skewt, kurtt)
-    else:
-        return rms
+        store.set(self.outputs.get('drift'), results)
 
 
 class AnalyzeMF(Routine):

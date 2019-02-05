@@ -229,5 +229,17 @@ lf_live_params = {
 }
 loop.add_routine(AnalyzeLiveLF(**lf_live_params))
 
+de_params = {
+    'inputs': {
+        'tod': 'tod',
+    },
+    'outputs': {
+        'drift': 'drift',
+    },
+    'driftFilter': 0.036,
+    'DEModes': 3,
+}
+loop.add_routine(GetDriftErrors(**de_params))
+
 # run pipeline
 loop.run(100,101)
