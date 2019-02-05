@@ -19,10 +19,12 @@ class FouriorTransform(Routine):
     def execute(self, store):
         tod = store.get(self.inputs.get('tod'))
 
-        # first de-trend tod 
+        # first de-trend tod
+        self.logger.info('Detrend the tod...')
         trend = moby2.tod.detrend_tod(tod)
 
         # find the next regular, this is to make fft faster
+        self.logger.info('Perform fft on the tod...')
         nf = nextregular(tod.nsamps)
         fdata = np.fft.rfft(tod.data, nf)
 
@@ -42,12 +44,14 @@ class FouriorTransform(Routine):
         # store data into data store
         store.set(self.outputs.get('tod'), tod)
         store.set(self.outputs.get('fft'), fft_data)
+        self.logger.info('fft data saved in data store')
 
 
 class TransformTOD(Routine):
     def __init__(self, **params):
         """This routine transforms a series of tod data transformation
         such as downsampling, remove_mean and detrend"""
+        Routine.__init__(self)
         self.inputs = params.get('inputs', None)
         self.outputs = params.get('outputs', None)
         self._remove_mean = params.get('remove_mean', True)

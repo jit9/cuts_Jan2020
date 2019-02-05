@@ -824,15 +824,14 @@ class AnalyzeMF(Routine):
         self._midFreqFilter = params.get("midFreqFilter", None)
         self._output_key = params.get("output_key", None)
 
-
     def execute(self, store):
         # get the frequency range to work on
-        n_l = int(self._midFreqFilter[0]/df))
-        n_h = int(self._midFreqFilter[1]/df))        
+        n_l = int(self._midFreqFilter[0]/df)
+        n_h = int(self._midFreqFilter[1]/df)
 
         # perform a high frequency like analysis on this range
         MFE = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, nmodes = par["MFEModes"], 
-                             highOrder = False, preSel = self.preLiveSel)
+                           highOrder = False, preSel = self.preLiveSel)
         
         results = {
             "MFELive": MFE

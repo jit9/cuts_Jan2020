@@ -92,7 +92,8 @@ transform_params = {
     'remove_mean': False,
     'remove_median': True,
     'detrend': False,
-    'remove_filter_gain': False
+    'remove_filter_gain': False,
+    'n_downsample': 4,  # reduction with 2^4 factor
 }
 loop.add_routine(TransformTOD(**transform_params))
 
@@ -176,51 +177,51 @@ fft_params = {
 }
 loop.add_routine(FouriorTransform(**fft_params))
 
-# study the dark detectors using LF data
-lf_dark_params = {
-    'inputs': {
-        'tod': 'tod',
-        'fft': 'fft_data',
-        'dets': 'dets',
-        'scan': 'scan_params',
-    },
-    'outputs': {
-        'lf_dark': 'lf_dark',
-    },
-    'cancelSync': False,
-    'doubleMode': False,
-    'freqRange': {
-        'fmin': 0.017,          
-        'fshift': 0.009,
-        'band': 0.071,
-        'Nwin': 1,
-    },
-}
-loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
+# # study the dark detectors using LF data
+# lf_dark_params = {
+#     'inputs': {
+#         'tod': 'tod',
+#         'fft': 'fft_data',
+#         'dets': 'dets',
+#         'scan': 'scan_params',
+#     },
+#     'outputs': {
+#         'lf_dark': 'lf_dark',
+#     },
+#     'cancelSync': False,
+#     'doubleMode': False,
+#     'freqRange': {
+#         'fmin': 0.017,          
+#         'fshift': 0.009,
+#         'band': 0.071,
+#         'Nwin': 1,
+#     },
+# }
+# loop.add_routine(AnalyzeDarkLF(**lf_dark_params))
 
-# study the live detectors using LF data
-lf_live_params = {
-    'inputs': {
-        'tod': 'tod',
-        'fft': 'fft_data',
-        'dets': 'dets',
-        'scan': 'scan_params',
-    },
-    'outputs': {
-        'lf_live': 'lf_live',
-    }, 
-    'cancelSync': True,
-    'doubleMode': False,
-    'removeDark': True,
-    'freqRange': {
-        'fmin': 0.017,
-        'fshift': 0.009,
-        'band': 0.071,
-        'Nwin': 10,
-    },
-    'separateFreqs': False,
-}
-loop.add_routine(AnalyzeLiveLF(**lf_live_params))
+# # study the live detectors using LF data
+# lf_live_params = {
+#     'inputs': {
+#         'tod': 'tod',
+#         'fft': 'fft_data',
+#         'dets': 'dets',
+#         'scan': 'scan_params',
+#     },
+#     'outputs': {
+#         'lf_live': 'lf_live',
+#     }, 
+#     'cancelSync': True,
+#     'doubleMode': False,
+#     'removeDark': True,
+#     'freqRange': {
+#         'fmin': 0.017,
+#         'fshift': 0.009,
+#         'band': 0.071,
+#         'Nwin': 10,
+#     },
+#     'separateFreqs': False,
+# }
+# loop.add_routine(AnalyzeLiveLF(**lf_live_params))
 
 # run pipeline
 loop.run(100,101)

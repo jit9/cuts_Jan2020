@@ -332,7 +332,7 @@ class SubstractHWP(Routine):
         # retrieve tod
         tod = store.get(self.inputs.get('tod'))
 
-        selfstore):.logger.info("Substract HWP signal")
+        self.logger.info("Substract HWP signal")
 
         # retrieve hwp_modes object from depot
         hwp_modes = self._depot.read_object(
