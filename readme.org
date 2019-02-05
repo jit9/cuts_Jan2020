@@ -1,0 +1,113 @@
+* act-cutflow 
+
+In this project I am trying to re-organize the cuts pipeline codes in ACT
+and break them into reusable pieces. 
+
+** Architecture
+The basic unit in the analysis is called ~Routine~. It represents a
+set of operations related to a certain tasks or analyses. For
+instance, there are a common routines that are applied to each TOD
+before going into the multi-frequencies analysis, such as applying MCE
+cuts, planet cuts, source cuts, detrends, apply filter cuts, etc. Each
+of these steps will be a separate routine. In this way, we can have a
+more modularized design as all the routines are independent pieces of
+codes for achieving a specific task that can easily be reusable. 
+
+The way that different routines communicate with each other is through
+a shared ~DataStore~. One can think of it as a giant dictionary (it
+actually is) that every routine can access. A typical workflow is to
+load some data associated with some key through the data store and
+process it, the output can be stored under another key in the data
+store so other routines can access it if needed.
+
+Since most of the analysis related to cuts will involve looping through 
+a list of TODs, and this is taken care by the underlying framework that
+this project is built on (called TODLoop). 
+
+In this framework, each routine has a few hooks to the different
+stages of the analysis, for example, an empty routine looks like
+this. 
+
+#+BEGIN_SRC python
+  class AnEmptyRoutine(Routine):
+      def __init__(self, **params):
+          Routine.__init__(self)
+        
+      def initialize(self):
+          """Scripts that run before processing the first TOD"""
+          pass
+
+      def execute(self, store):
+          """Scripts that run for each TOD"""
+          pass
+
+      def finalize(self):
+          """Scripts that run after processing all TODs"""
+          pass
+#+END_SRC
+
+~initialize~ contains scripts that will be ran before processing all
+tods, ~execute~ function contains script that will be ran for each
+TOD, and it is typically where most of the analysis is performed. It
+also provides a reference to the shared data store so one can retrieve
+relevant information that are provided by other routines. ~finalize~
+function contains the codes that should run after looping through all
+tods, kind of clean-up stages.
+
+An actual working example of a routine is like this
+#+BEGIN_SRC python
+class FindJumps(Routine):
+    def __init__(self, **params):
+        Routine.__init__(self)
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._dsStep = params.get('dsStep', None)
+        self._window = params.get('window', None)
+
+    def execute(self, store):
+        tod = store.get(self._input_key)
+
+        # find jumps
+        jumps = moby2.libactpol.find_jumps(tod.data,
+                                           self._dsStep,
+                                           self._window)
+        # store the jumps values
+        crit = {
+            'jumpLive': {'values': jumps },
+            'jumpDark': {'values': jumps }
+        }
+        
+        # save to data store
+        store.set(self._output_key, crit)
+#+END_SRC
+
+This showcases the typical structure of a routine. One first retrieves
+the relevant data from the data store, and export the transformed data
+back to the data store after processing.
+
+** The Cut Pipeline 
+Here is a rough sketch of some of the routines in the existing pipeline
+and their whereabouts in this repository. 
+
+|---------------------+-----------------+-------------+-------------------|
+| routine             | moby2           | here        | name              |
+|---------------------+-----------------+-------------+-------------------|
+| cut planets         | process_cuts.py | cuts.py     | CutPlanets        |
+| cut sources         | process_cuts.py | cuts.py     | CutSources        |
+| cut glitches        | process_cuts.py | cuts.py     | CutPartial        |
+| remove mean         | process_cuts.py | tod.py      | TransformTOD      |
+| detrend             | process_cuts.py | tod.py      | TransformTOD      |
+| remove filter gain  | process_cuts.py | tod.py      | TransformTOD      |
+| downsample          | process_cuts.py | tod.py      | TransformTOD      |
+| find zero detectors | pathologies.py  | tod.py      | GetDetectors      |
+| find jumps          | pathologies.py  | cuts.py     | FindJumps         |
+| calibrate to pW     | pathologies.py  | tod.py      | CalibrateTOD      |
+| analyze scans       | pathologies.py  | analysis.py | AnalyzeScan       |
+| fourior transform   | pathologies.py  | tod.py      | FouriorTransform  |
+| multi-freq analysis | pathologies.py  | analysis.py | AnalyzeDarkLF ... |
+|---------------------+-----------------+-------------+-------------------|
+
+
+
+
+
