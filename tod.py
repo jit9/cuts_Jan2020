@@ -7,6 +7,41 @@ from todloop import Routine
 from utils import *
 
 
+class FouriorTransform(Routine):
+    def __init__(self, **params):
+        Routine.__init__(self)
+        self._input_key = params.get('input_key', None)
+        self._output_key = params.get('output_key', None)
+        self._fft_data = params.get('fft_data', None)
+
+    def execute(self, store):
+        tod = store.get(self._input_key)
+
+        # first de-trend tod 
+        trend = moby2.tod.detrend_tod(tod)
+
+        # find the next regular, this is to make fft faster
+        nf = nextregular(tod.nsamps)
+        fdata = np.fft.rfft(tod.data, nf)
+
+        # time and freq units
+        dt = (tod.ctime[-1]-tod.ctime[0])/(tod.nsamps-1)
+        df = 1./(dt*nf)
+
+        # summarize fft data
+        fft_data = {
+            'trend': trend,
+            'fdata': fdata,
+            'dt': dt,
+            'df': df,
+            'nf': nf
+        }
+
+        # store data into data store
+        store.set(self._output_key, tod)
+        store.set(self._fft_data, fft_data)
+
+
 class TransformTOD(Routine):
     def __init__(self, **params):
         """This routine transforms a series of tod data transformation
