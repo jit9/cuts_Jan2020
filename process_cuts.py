@@ -3,7 +3,7 @@ from todloop.tod import TODLoader
 
 from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
-from analysis import AnalyzeScan, AnalyzeDarkLF
+from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF
 
 # initialize the pipeline
 loop = TODLoop()
@@ -32,7 +32,7 @@ source_params = {
     'no_noise': True,
     'depot': '/data/actpol/depot'
 }
-loop.add_routine(CutSources(**source_params))
+# loop.add_routine(CutSources(**source_params))
 
 # add a routine to cut the planets
 planets_params = {
@@ -45,7 +45,7 @@ planets_params = {
     'tag_planet': 'pa3_f90_s16_c10_v1_planet',
     'depot': '/data/actpol/depot',
 }
-loop.add_routine(CutPlanets(**planets_params))
+# loop.add_routine(CutPlanets(**planets_params))
 
 # add a routine to remove the sync pick up
 sync_params = {
@@ -60,7 +60,7 @@ sync_params = {
     'force_sync': False,
     'depot': '/data/actpol/depot',
 }
-loop.add_routine(RemoveSyncPickup(**sync_params))
+# loop.add_routine(RemoveSyncPickup(**sync_params))
 
 # add a routine to cut the glitches
 partial_params = {
@@ -77,8 +77,7 @@ partial_params = {
                  'maxGlitch': 50000, 'highPassFc': 6.0, 'buffer': 200 },
     'depot': '/data/actpol/depot',
 }
-
-loop.add_routine(CutPartial(**partial_params))
+# loop.add_routine(CutPartial(**partial_params))
 
 # add a routine to transform the TODs
 transform_params = {
@@ -162,7 +161,7 @@ jump_params = {
     'dsStep': 4,
     'window': 1,
 }
-loop.add_routine(FindJumps(**jump_params))
+# loop.add_routine(FindJumps(**jump_params))
 
 # add a routine to perform the fourior transform
 fft_params = {
@@ -205,7 +204,8 @@ lf_live_params = {
         'fft': 'fft_data',
         'dets': 'dets',
         'scan': 'scan_params',
-        'dark': 'lf_dark'
+        'dark': 'lf_dark',
+        'cal': 'calData'
     },
     'outputs': {
         'lf_live': 'lf_live',
