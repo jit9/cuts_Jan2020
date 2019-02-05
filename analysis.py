@@ -697,7 +697,8 @@ class GetDriftErrors(Routine):
         fdata = fft_data['fdata']
         df = fft_data['df']
 
-        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']        
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
+        nmodes = self._nmodes
 
         # find the range of frequencies of interests
         n_l = 1
@@ -705,10 +706,10 @@ class GetDriftErrors(Routine):
 
         # get drift errors
         ndets = len(live)
-        hf_data = fdata[sel, n_l:n_h]
+        hf_data = fdata[live, n_l:n_h]
 
         # remove first [nmodes] common modes
-        if self._nmodes > 0:
+        if nmodes > 0:
             # find the correlation between different detectors
             c = np.dot(hf_data, hf_data.T.conjugate())
 
@@ -721,7 +722,7 @@ class GetDriftErrors(Routine):
             hf_data -= np.dot(coeff.T.conj(), modes)
 
         # compute the rms for the detectors
-        rms = np.zeros(ndet)
+        rms = np.zeros(ndets)
         rms[live] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
 
         results = {
