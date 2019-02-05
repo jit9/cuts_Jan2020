@@ -4,29 +4,28 @@ In this project I am trying to re-organize the cuts pipeline codes in ACT
 and break them into reusable pieces. 
 
 ** Architecture
-The basic unit in the analysis is called ~Routine~. It represents a
-set of operations related to a certain tasks or analyses. For
-instance, there are a common routines that are applied to each TOD
-before going into the multi-frequencies analysis, such as applying MCE
-cuts, planet cuts, source cuts, detrends, apply filter cuts, etc. Each
-of these steps will be a separate routine. In this way, we can have a
-more modularized design as all the routines are independent pieces of
-codes for achieving a specific task that can easily be reusable. 
+The basic unit in the analysis is called a ~Routine~. It represents a
+set of operations related to a specific task or analysis. For
+instance, some of the routines that are applied to each TOD before the
+multi-frequencies analysis includes applying MCE cuts, planet cuts,
+source cuts, detrends, applying filter cuts, etc. Each of these steps
+will be a separate ~Routine~. In this way we can have a more
+modularized design as all the routines are independent of the other
+ones, and they are targeted at a specific task. This also makes the 
+codes more readable and reusable. 
 
 The way that different routines communicate with each other is through
-a shared ~DataStore~. One can think of it as a giant dictionary (it
+a shared ~DataStore~ object. One can think of it as a giant dictionary (it
 actually is) that every routine can access. A typical workflow is to
-load some data associated with some key through the data store and
+load some data associated with a key through the data store and
 process it, the output can be stored under another key in the data
 store so other routines can access it if needed.
 
-Since most of the analysis related to cuts will involve looping through 
-a list of TODs, and this is taken care by the underlying framework that
-this project is built on (called TODLoop). 
-
-In this framework, each routine has a few hooks to the different
-stages of the analysis, for example, an empty routine looks like
-this. 
+Since most of the analysis related to cuts will involve looping
+through a list of TODs, and this is taken care by the underlying
+framework that this project is built on (called TODLoop). In this
+framework, each routine has a few hooks to the different stages of the
+analysis, for example, an empty routine looks like this.
 
 #+BEGIN_SRC python
   class AnEmptyRoutine(Routine):
@@ -90,7 +89,7 @@ Here is a rough sketch of some of the routines in the existing pipeline
 and their whereabouts in this repository. 
 
 |---------------------+-----------------+-------------+-------------------|
-| routine             | moby2           | here        | name              |
+| steps applied       | moby2           | here        | name              |
 |---------------------+-----------------+-------------+-------------------|
 | cut planets         | process_cuts.py | cuts.py     | CutPlanets        |
 | cut sources         | process_cuts.py | cuts.py     | CutSources        |
@@ -106,8 +105,4 @@ and their whereabouts in this repository.
 | fourior transform   | pathologies.py  | tod.py      | FouriorTransform  |
 | multi-freq analysis | pathologies.py  | analysis.py | AnalyzeDarkLF ... |
 |---------------------+-----------------+-------------+-------------------|
-
-
-
-
 
