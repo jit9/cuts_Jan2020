@@ -106,3 +106,14 @@ and their whereabouts in this repository.
 | multi-freq analysis | pathologies.py  | analysis.py | AnalyzeDarkLF ... |
 |---------------------+-----------------+-------------+-------------------|
 
+** Files
+- cuts.py: cuts related routines
+- tod.py: tod related routines
+- analysis.py: mainly the multi-freq analysis, also some temperature
+  analysis, scan analysis, etc.
+- utils.py: some utility functions such ~nextregular~ for fft,
+  preselection functions
+- extra.py: some routines from moby2 that are not used are placed here
+  for completeness
+- process_cuts: the driver program, it defines the pipeline and
+  specifies the parameters inputs for each routine.
