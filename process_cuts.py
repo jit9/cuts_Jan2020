@@ -316,4 +316,4 @@ prepare_params = {
 loop.add_routine(PrepareDataLabel(**prepare_params))
 
 # run pipeline
-loop.run(0,1)
+loop.run(0,60)

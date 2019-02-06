@@ -127,8 +127,6 @@ class AnalyzeScan(Routine):
 
         # find non-stopping part of scan
         onescan = az[~noscan][:T_ex]
-#         import pdb
-#         pdb.set_trace()
         az_min0 = np.min(onescan[stop[~noscan][:T_ex] * (onescan < lo)
                                  * (onescan > lo - td)])
         az_max0 = np.max(onescan[stop[~noscan][:T_ex] * (onescan > hi)
