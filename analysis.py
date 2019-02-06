@@ -878,7 +878,7 @@ class AnalyzeHF(Routine):
         results["kurtpLive"][live] = kurtt[1]
 
         # analyze the dark detectors for the same frequency range
-        self.logger.info("Analyze dark detectors")
+        self.logger.info("Analyzing dark detectors")
         rms = self.highFreqAnal(fdata, dark, [n_l,n_h], nsamps, nmodes=nmodes_dark, 
                                 highOrder=False)
 
@@ -917,7 +917,7 @@ class AnalyzeHF(Routine):
         # if we are interested in high order effects, skew and kurtosis will
         # be calculated here
         if highOrder:
-            hfd, _ = get_time_domain_modes( hf_data, 1, nsamps)
+            hfd, _ = get_time_domain_modes(hf_data, 1, nsamps)
             skewt = stat.skewtest(hfd,axis=1)
             kurtt = stat.kurtosistest(hfd,axis=1)
             if scanParams is not None:

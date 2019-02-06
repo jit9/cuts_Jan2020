@@ -7,6 +7,8 @@ from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
 
+from report import Summarize
+
 # initialize the pipeline
 loop = TODLoop()
 
@@ -158,7 +160,7 @@ jump_params = {
         'tod': 'tod'
     },
     'outputs':{
-        'jumps': 'crit_jumps'
+        'jumps': 'jumps'
     },
     'dsStep': 4,
     'window': 1,
@@ -231,6 +233,7 @@ lf_live_params = {
 }
 loop.add_routine(AnalyzeLiveLF(**lf_live_params))
 
+# get the drift errors
 de_params = {
     'inputs': {
         'tod': 'tod',
@@ -246,6 +249,7 @@ de_params = {
 }
 loop.add_routine(GetDriftErrors(**de_params))
 
+# study the live detectors in mid-freq
 mf_params = {
     'inputs': {
         'tod': 'tod',
@@ -261,6 +265,7 @@ mf_params = {
 }
 loop.add_routine(AnalyzeLiveMF(**mf_params))
 
+# study the live and dark detectors in HF
 hf_params = {
     'inputs': {
         'tod': 'tod',
@@ -269,7 +274,7 @@ hf_params = {
         'scan': 'scan_params',
     },
     'outputs': {
-        'hf_live': 'hf_live'
+        'hf': 'hf'
     },
     'getPartial': False,
     'highFreqFilter': [9.0, 19.0],
@@ -278,6 +283,20 @@ hf_params = {
     'highOrder': True,
 }
 loop.add_routine(AnalyzeHF(**hf_params))
+
+# summarize the pickle parameters
+summary_params = {
+    'inputs': {
+        'lf_dark': 'lf_dark',
+        'lf_live': 'lf_live',
+        'drift': 'drift',
+        'mf_live': 'mf_live',
+        'hf': 'hf',
+        'jumps': 'jumps',
+    },
+    'outpath': 'summary.pickle',
+}
+loop.add_routine(Summarize(**summary_params))
 
 # run pipeline
 loop.run(100,101)
