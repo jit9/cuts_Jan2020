@@ -1,6 +1,7 @@
 import numpy as np
 from numpy import ma
 import scipy.stats.mstats as ms
+from scipy import stats as stat
 from scipy.cluster.vq import kmeans2
 import logging
 
@@ -808,6 +809,7 @@ class AnalyzeHF(Routine):
         ndets = len(tod.info.det_uid)
 
         live = store.get(self.inputs.get('dets'))['live_final']
+        dark = store.get(self.inputs.get('dets'))['dark_final']
 
         fft_data = store.get(self.inputs.get('fft'))
         fdata = fft_data['fdata']
@@ -829,6 +831,7 @@ class AnalyzeHF(Routine):
 
         # if partial is labeled the analysis will be carried out
         # for each individual scan between the turnning points
+        # TODO: There is still some problem with partial analysis
         if not(self._getPartial):
             rms, skewt, kurtt = self.highFreqAnal(fdata, live, [n_l,n_h], nsamps,
                                                   highOrder=self._highOrder,

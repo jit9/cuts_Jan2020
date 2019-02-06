@@ -259,7 +259,7 @@ mf_params = {
     'midFreqFilter': [0.3, 1.0],
     'nmodes': 8,
 }
-loop.add_routine(AnalyzeMF(**mf_params))
+loop.add_routine(AnalyzeLiveMF(**mf_params))
 
 hf_params = {
     'inputs': {
@@ -271,12 +271,13 @@ hf_params = {
     'outputs': {
         'hf_live': 'hf_live'
     },
-    'getPartial': True,
+    'getPartial': False,
     'highFreqFilter': [9.0, 19.0],
     'nLiveModes': 10,
     'nDarkModes': 3,
     'highOrder': True,
 }
-loop.add_routine()
+loop.add_routine(AnalyzeHF(**hf_params))
+
 # run pipeline
 loop.run(100,101)
