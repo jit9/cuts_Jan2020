@@ -27,6 +27,7 @@ class AnalyzeScan(Routine):
 
         sample_time = (tod.ctime[-1] - tod.ctime[0]) / (tod.ctime.shape[0]-1)
         # analyze scan and save result into a dictionary
+        self.logger.info("Analyzing scan pattern...")
         scan = self.analyze_scan(
             np.unwrap(tod.az), sample_time,
             **self._scan_params)
@@ -180,6 +181,7 @@ class AnalyzeTemperature(Routine):
         dTemp = None
         temperatureCut = False
         
+        self.logger.info("Analyzing temperature...")
         if self._channel is None or self._T_max is None \
            or self._dT_max is None:
             pass
@@ -325,6 +327,7 @@ class AnalyzeDarkLF(Routine):
         """Find correlations and gains to the main common mode over a
         frequency range
         """
+        self.logger.info("Analyzing freqs %s" % frange)
         # get relevant low freq data in the detectors selected
         lf_data = fdata[sel, frange[0]:frange[1]]
         ndet = len(sel)
@@ -554,6 +557,7 @@ class AnalyzeLiveLF(Routine):
         """Find correlations and gains to the main common mode over a
         frequency range
         """
+        self.logger.info("Analyzing freqs %s" % frange)
         # get relevant low freq data in the detectors selected
         lf_data = fdata[sel, frange[0]:frange[1]]
         ndet = len(sel)
@@ -647,6 +651,7 @@ class AnalyzeLiveLF(Routine):
         @return correlated modes in frequency and time domain, plus thermometer
                 info.
         """
+        self.logger.info("Finding dark modes in freqs %s" % frange)        
         n_l, n_h=frange
         fc_inputs = []
 
@@ -764,9 +769,10 @@ class AnalyzeLiveMF(Routine):
         # get drift errors
         ndets = len(live)
         hf_data = fdata[live, n_l:n_h]
-
+        
         # remove first [nmodes] common modes
         if nmodes > 0:
+            self.logger.info("Deprojecting %d modes" % nmodes)
             # find the correlation between different detectors
             c = np.dot(hf_data, hf_data.T.conjugate())
 
@@ -793,6 +799,7 @@ class AnalyzeHF(Routine):
     def __init__(self, **params):
         """This routine analyzes both live and dark detectors in
         the high frequency band"""
+        Routine.__init__(self)
         self.inputs = params.get('inputs', None)
         self.outputs = params.get('outputs', None)
         self._getPartial = params.get('getPartial', False)
@@ -833,10 +840,12 @@ class AnalyzeHF(Routine):
         # for each individual scan between the turnning points
         # TODO: There is still some problem with partial analysis
         if not(self._getPartial):
+            self.logger.info("Performing partial analysis")
             rms, skewt, kurtt = self.highFreqAnal(fdata, live, [n_l,n_h], nsamps,
                                                   highOrder=self._highOrder,
                                                   nmodes=nmodes_live)
         else:
+            self.logger.info("Performing non-partial analysis")
             rms, skewt, kurtt, prms, pskewt, pkurtt = self.highFreqAnal(fdata, live, 
                                                                         [n_l,n_h],
                                                                         nsamps,
@@ -869,6 +878,7 @@ class AnalyzeHF(Routine):
         results["kurtpLive"][live] = kurtt[1]
 
         # analyze the dark detectors for the same frequency range
+        self.logger.info("Analyze dark detectors")
         rms = self.highFreqAnal(fdata, dark, [n_l,n_h], nsamps, nmodes=nmodes_dark, 
                                 highOrder=False)
 
@@ -881,12 +891,14 @@ class AnalyzeHF(Routine):
         """
         @brief Find noise RMS, skewness and kurtosis over a frequency band
         """
+        self.logger.info("Analyzing freqs %s" % frange)
         ndet = len(sel)
 
         # get the high frequency fourior modes
         hf_data = fdata[sel, frange[0]:frange[1]]
 
         if nmodes > 0:
+            self.logger.info("Deprojecting %d modes" % nmodes)
             # find the correlation between different detectors
             c = np.dot(hf_data,hf_data.T.conjugate())
 
