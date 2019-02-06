@@ -792,7 +792,7 @@ class AnalyzeLiveMF(Routine):
             "MFELive": rms
         }
 
-        store.set(self.outputs.get('drift'), results)
+        store.set(self.outputs.get('mf_live'), results)
 
 
 class AnalyzeHF(Routine):
@@ -840,12 +840,12 @@ class AnalyzeHF(Routine):
         # for each individual scan between the turnning points
         # TODO: There is still some problem with partial analysis
         if not(self._getPartial):
-            self.logger.info("Performing partial analysis")
+            self.logger.info("Performing non-partial analysis")
             rms, skewt, kurtt = self.highFreqAnal(fdata, live, [n_l,n_h], nsamps,
                                                   highOrder=self._highOrder,
                                                   nmodes=nmodes_live)
         else:
-            self.logger.info("Performing non-partial analysis")
+            self.logger.info("Performing partial analysis")
             rms, skewt, kurtt, prms, pskewt, pkurtt = self.highFreqAnal(fdata, live, 
                                                                         [n_l,n_h],
                                                                         nsamps,
@@ -884,7 +884,7 @@ class AnalyzeHF(Routine):
 
         results["rmsDark"] = rms
 
-        store.set(self.outputs.get('hf_live'), results)
+        store.set(self.outputs.get('hf'), results)
 
     def highFreqAnal(self, fdata, sel, frange, nsamps, nmodes=0, highOrder=False,
                      scanParams=None):
