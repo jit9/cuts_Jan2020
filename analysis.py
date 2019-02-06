@@ -1,7 +1,9 @@
 import numpy as np
 from numpy import ma
 import scipy.stats.mstats as ms
+from scipy import stats as stat
 from scipy.cluster.vq import kmeans2
+import logging
 
 import moby2
 from todloop import Routine
@@ -13,16 +15,19 @@ class AnalyzeScan(Routine):
     def __init__(self, **params):
         """This routine analyzes the scan pattern"""
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._output_key = params.get('output_key', None)
         self._scan_params = params.get('scan_param', {})
+        # self.logger.setLevel(logging.DEBUG)
 
     def execute(self, store):
         # load tod
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         sample_time = (tod.ctime[-1] - tod.ctime[0]) / (tod.ctime.shape[0]-1)
         # analyze scan and save result into a dictionary
+        self.logger.info("Analyzing scan pattern...")
         scan = self.analyze_scan(
             np.unwrap(tod.az), sample_time,
             **self._scan_params)
@@ -41,8 +46,8 @@ class AnalyzeScan(Routine):
             'scan_freq': scan_freq
         }
         
-        self.logger.info(scan_params)
-        store.set(self._output_key, scan_params)
+        self.logger.debug(scan_params)
+        store.set(self.outputs.get('scan'), scan_params)
 
     def analyze_scan(self, az, dt=0.002508, N=50, vlim=0.01, qlim=0.01):
         """Find scan parameters and cuts"""
@@ -176,6 +181,7 @@ class AnalyzeTemperature(Routine):
         dTemp = None
         temperatureCut = False
         
+        self.logger.info("Analyzing temperature...")
         if self._channel is None or self._T_max is None \
            or self._dT_max is None:
             pass
@@ -202,28 +208,34 @@ class AnalyzeTemperature(Routine):
             'temperatureCut': temperatureCut
         }
         
-        self.logger.info(thermal_results)
+        self.logger.debug(thermal_results)
         store.set(self._output_key, thermal_results)
 
 
 class AnalyzeDarkLF(Routine):
     def __init__(self, **params):
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._dets = params.get('dets', None)
         self._fft_data = params.get('fft_data', None)
         self._tod = params.get('tod', None)
         self._output_key = params.get('output_key', None)
         self._scan = params.get('scan', None)
         self._freqRange = params.get('freqRange', None)
+        self._double_mode = params.get('doubleMode', False)
         self._params = params
 
     def execute(self, store):
         # retrieved relevant data from data store
-        tod = store.get(self._tod)
-        fft_data = store.get(self._fft_data)
+        tod = store.get(self.inputs.get('tod'))
+
+        fft_data = store.get(self.inputs.get('fft'))
         fdata = fft_data['fdata']
         df = fft_data['df']
-        sel = store.get(self._dets)['dark_final']
-        scan_freq = store.get(self._scan)['scan_freq']
+        
+        sel = store.get(self.inputs.get('dets'))['dark_final']
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
 
         # get the frequency band parameters
         frange = self._freqRange
@@ -266,19 +278,20 @@ class AnalyzeDarkLF(Routine):
         # [S S U S S U S U S U] with S means selected as good and
         # u means unselected (bad). Here we want to count the number
         # of "votes" saying this detector is good
-        psel = np.sum(psel, axis=0)
+        spsel = np.sum(psel, axis=0)
 
         # get the highest amount of score that the detectors receive
         # and use this as a threshold to judge the rest of the
         # detectors
-        Nmax = psel.max()
+        Nmax = spsel.max()
 
         # For any detectors who are "voted" as good more than half
         # of the maximum "votes" will be selected as good
-        psel50 = psel >= Nmax/2.
+        psel50 = spsel >= Nmax/2.
 
         # Normalize gain by the average gain of a good selection of
         # detectors, here this selection is given by psel50 AND presel
+        # loop over the frequency windows and normalize respectively
         for g, s in zip(gain, psel):
             g /= np.mean(g[psel50*s])
             
@@ -306,21 +319,19 @@ class AnalyzeDarkLF(Routine):
         results["gainDark"] = mgain_mean.data
         results["normDark"] = mnorm_mean.data
         results["darkSel"] = psel50.copy()  # not sure why copy is needed
-        store.set(self._output_key, results)
+
+        # save to the data store
+        store.set(self.outputs.get('lf_dark'), results)
         
     def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq):
         """Find correlations and gains to the main common mode over a
         frequency range
         """
+        self.logger.info("Analyzing freqs %s" % frange)
         # get relevant low freq data in the detectors selected
         lf_data = fdata[sel, frange[0]:frange[1]]
         ndet = len(sel)
         res = {}
-
-        # Apply sine^2 taper to data
-        if self._params.get("useTaper", False):
-            taper = get_sine2_taper(frange, edge_factor = 6)
-            lf_data *= np.repeat([taper],len(lf_data),axis=0)
 
         # Scan frequency rejection
         if self._params.get("cancelSync",False) and (scan_freq/df > 7):
@@ -348,44 +359,20 @@ class AnalyzeDarkLF(Routine):
             nlim = [0, nlim]
         normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
         
-        # check which preselection is specified
-        presel_method = ppar.get("method", "median")
-        if presel_method is "median":
-            sl = presel_by_median(cc, sel=normSel[sel], **presel_params)
-            res["groups"] = None
-            
-        elif presel_method is "groups":
-            G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **presel_params)
-            sl = np.zeros(cc.shape[1], dtype=bool)
-            sl[ld] = True
-            res["groups"] = {
-                "G": G,
-                "ind": ind,
-                "ld": ld,
-                "smap": smap
-            }
-        else:
-            raise "ERROR: Unknown preselection method"
-
         # The number of sels are just overwhelmingly confusing
         # To clarify for myself,
         # - normSel: selects the detectors with good norm
         # - sel: the initial selection of detectors specified
         #        for this case it is selection of dark detectors
-        # - sl: is the preselected detectors from the median
-        #       or group methods
-        # Here it's trying to apply the preselection to the
-        # dark selection
         preSel = sel.copy()
-        preSel[sel] = sl
         
         # Get Correlations
-        u, s, v = np.linalg.svd(lf_data[sl], full_matrices=False )
+        u, s, v = np.linalg.svd(lf_data, full_matrices=False)
         corr = np.zeros(ndet)
-        if par.get("doubleMode", False):
-            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
+        if self._double_mode:
+            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm
         else:
-            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm[sl]
+            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm
 
         # Get Gains
         # data = CM * gain
@@ -393,23 +380,21 @@ class AnalyzeDarkLF(Routine):
         gain[preSel] = np.abs(u[:, 0])
         res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
                     "cc": cc, "normSel": normSel})
-        
         return res
 
 
 class AnalyzeLiveLF(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
-        self._dets = params.get('dets', None)
-        self._fft_data = params.get('fft_data', None)
-        self._tod = params.get('tod', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._output_key = params.get('output_key', None)
-        self._scan = params.get('scan', None)
         self._freqRange = params.get('freqRange', None)
         self._separateFreqs = params.get('separateFreqs', False)
-        self._dark = params.get('dark_results', None)
         self._full = params.get('fullReport', False)
         self._removeDark = params.get('removeDark', False)
+        self._darkModesParams = params.get('darkModesParams', {})
+        self._forceResp = params.get("forceResp", True)
         self._params = params
 
     def execute(self, store):
@@ -417,15 +402,24 @@ class AnalyzeLiveLF(Routine):
         # the AnalyzeDarkLF
         
         # retrieve relevant data from store
-        tod = store.get(self._tod)
-        live = store.get(self._dets)['live_final']
+        tod = store.get(self.inputs.get('tod'))
         ndets = len(tod.info.det_uid)
-        fdata = store.get(self._fft_data)['fdata']
-        df = store.get(self._fft_data)['df']
-        nf = store.get(self._fft_data)['nf']
-        scan_freq = store.get(self._scan)['scan_freq']
-        darkSel = store.get(self._dark)['darkSel']
+        nsamps = tod.nsamps
         
+        live = store.get(self.inputs.get('dets'))['live_final']
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+        nf = fft_data['nf']
+
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
+        darkSel = store.get(self.inputs.get('dark'))['darkSel']
+
+        calData = store.get(self.inputs.get('cal'))
+        respSel = calData['respSel']
+        ff = calData['ff']
+        flatfield = calData['flatfield_object']
+
         # empty list to store the detectors for each frequency bands if
         # that's what we want, or otherwise we will store all detectors here
         fbandSel = []
@@ -441,32 +435,30 @@ class AnalyzeLiveLF(Routine):
                 self.fbandSel.append((tod.info.array_data["nom_freq"] == fb)*live)
                 self.fbands.append(str(int(fb)))
         else:
-            self.fbandSel.append(live)
-            self.fbands.append("all")
+            fbandSel.append(live)
+            fbands.append("all")
 
         # initialize the preselection for live detectors
-        self.preLiveSel = np.zeros(ndets, dtype=bool)
-        self.liveSel = np.zeros(ndets, dtype=bool)
+        preLiveSel = np.zeros(ndets, dtype=bool)
+        liveSel = np.zeros(ndets, dtype=bool)
 
         # initialize the vectors to store the statistics or live data
-        self.crit["darkRatioLive"] = np.zeros(ndets, dtype=float)
-        self.crit["corrLive"] = np.zeros(ndets, dtype=float)
-        self.crit["gainLive"] = np.zeros(ndets, dtype=float)
-        self.crit["normLive"] = np.zeros(ndets, dtype=float)
+        crit = {}
+        crit["darkRatioLive"] = np.zeros(ndets, dtype=float)
+        crit["corrLive"] = np.zeros(ndets, dtype=float)
+        crit["gainLive"] = np.zeros(ndets, dtype=float)
+        crit["normLive"] = np.zeros(ndets, dtype=float)
 
         # if resp will be used
-        if not(par[parTag].get("forceResp",True)):
+        if not self._forceResp:
             respSel = None
-                
+
         # get the frequency band parameters
         frange = self._freqRange
         fmin = frange.get("fmin", 0.017)
         fshift = frange.get("fshift", 0.009)
         band = frange.get("band", 0.070)
         Nwin = frange.get("Nwin", 1)
-
-        # initialize empty dictionary to store data from each freq band
-        self.multiFreqData = {}
 
         # loop over frequency band
         for fbSel,fbn in zip(fbandSel, fbands):
@@ -495,14 +487,14 @@ class AnalyzeLiveLF(Routine):
                         print "ERROR: no dark selection supplied"
                         return 0
 
-                    fcmi, cmi, cmdti = getDarkModes(fdata, darkSel, [n_l,n_h],
-                                                    df, nf, nsamps, par, tod)
+                    fcmi, cmi, cmdti = self.getDarkModes(fdata, darkSel, [n_l,n_h],
+                                                         df, nf, nsamps)
                     fcm.append(fcmi)
                     cm.append(cmi)
                     cmdt.append(cmdti)
 
-                r = lowFreqAnal(fdata, sel, [n_l,n_h], df, nsamps, scan_freq, par.get(parTag,{}), 
-                                fcmodes = fcmi, respSel=respSel, flatfield=flatfield)
+                r = self.lowFreqAnal(fdata, live, [n_l,n_h], df, nsamps, scan_freq,
+                                     fcmodes=fcmi, respSel=respSel, flatfield=flatfield)
                 
                 psel.append(r["preSel"])
                 corr.append(r["corr"])
@@ -531,28 +523,33 @@ class AnalyzeLiveLF(Routine):
             mcorr_max = mcorr.max(axis=0)
             mnorm = ma.MaskedArray(norm,~np.array(psel))
             mnorm_mean = mnorm.mean(axis=0)
-                        
+
+            # summarize the results so far
+            results = {
+                "preLiveSel": psel50,
+                "liveSel": psel50,
+                "corr": mcorr_max.data,
+                "gain": mgain_mean.data,
+                "norm": mnorm_mean.data,
+            }
+
             if self._removeDark:
                 mdarkRatio = ma.MaskedArray(darkRatio,~np.array(psel))
                 mdarkRatio_mean = mdarkRatio.mean(axis=0)
-                res['darkRatio'] = mdarkRatio_mean.data
+                results['darkRatio'] = mdarkRatio_mean.data
 
-            results = {
-                "preLiveSel": psel50[fbSel],
-                "liveSel": psel50[fbSel],
-                "corrLive": mcorr_max.data[fbSel],
-                "gainLive": mgain_mean.data[fbSel],
-                "normLive": mnorm_mean.data[fbSel],
-                "darkRatio": mdarkRatio_mean.data[fbSel]
-            }
+            # update the crit dictionary to output
+            crit['corrLive'][fbSel] = results["corr"][fbSel]
+            crit['gainLive'][fbSel] = results["gain"][fbSel]
+            crit['normLive'][fbSel] = results["norm"][fbSel]
 
-            if res.has_key('darkRatio'):
-                self.crit["darkRatioLive"]["values"][fbSel] = res["darkRatio"][fbSel]
+            if results.has_key('darkRatio'):
+                crit["darkRatioLive"][fbSel] = results["darkRatio"][fbSel]
 
-            multiFreqData[fbSel] = all_data
-            
         # Undo flatfield correction
-        self.crit["gainLive"] /= np.abs(ff)
+        crit["gainLive"] /= np.abs(ff)
+
+        store.set(self.outputs.get('lf_live'), crit)
 
 
     def lowFreqAnal(self, fdata, sel, frange, df, nsamps, scan_freq,
@@ -560,15 +557,11 @@ class AnalyzeLiveLF(Routine):
         """Find correlations and gains to the main common mode over a
         frequency range
         """
+        self.logger.info("Analyzing freqs %s" % frange)
         # get relevant low freq data in the detectors selected
         lf_data = fdata[sel, frange[0]:frange[1]]
         ndet = len(sel)
         res = {}
-
-        # Apply sine^2 taper to data
-        if self._params.get("useTaper", False):
-            taper = get_sine2_taper(frange, edge_factor = 6)
-            lf_data *= np.repeat([taper],len(lf_data),axis=0)
 
         # Deproject correlated modes
         if fcmodes is not None:
@@ -577,17 +570,17 @@ class AnalyzeLiveLF(Routine):
 
             # actually do the deprojection here
             for m in fcmodes:
-                coeff = numpy.dot(lf_data.conj(),m)
-                lf_data -= numpy.outer(coeff.conj(),m)
+                coeff = np.dot(lf_data.conj(),m)
+                lf_data -= np.outer(coeff.conj(),m)
                 dark_coeff.append(coeff)
 
             # Reformat dark coefficients
             if len(dark_coeff) > 0:
-                dcoeff = numpy.zeros([len(dark_coeff),ndet],dtype=complex)
+                dcoeff = np.zeros([len(dark_coeff),ndet],dtype=complex)
                 dcoeff[:,sel] = np.array(dark_coeff)
 
             # Get Ratio
-            ratio = numpy.zeros(ndet,dtype=float)
+            ratio = np.zeros(ndet,dtype=float)
             data_norm[data_norm==0.] = 1.
             # after deprojection versus before deprojection
             # this should really be called live ratio than dark ratio
@@ -619,51 +612,27 @@ class AnalyzeLiveLF(Routine):
             nlim = [0, nlim]
         normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
         
-        # check which preselection is specified
-        presel_method = ppar.get("method", "median")
-        if presel_method is "median":
-            sl = presel_by_median(cc, sel=normSel[sel], **presel_params)
-            res["groups"] = None
-            
-        elif presel_method is "groups":
-            G, ind, ld, smap = group_detectors(cc, sel=normSel[sel], **presel_params)
-            sl = np.zeros(cc.shape[1], dtype=bool)
-            sl[ld] = True
-            res["groups"] = {
-                "G": G,
-                "ind": ind,
-                "ld": ld,
-                "smap": smap
-            }
-        else:
-            raise "ERROR: Unknown preselection method"
-
         # The number of sels are just overwhelmingly confusing
         # To clarify for myself,
         # - normSel: selects the detectors with good norm
         # - sel: the initial selection of detectors specified
         #        for this case it is selection of dark detectors
-        # - sl: is the preselected detectors from the median
-        #       or group methods
-        # Here it's trying to apply the preselection to the
-        # dark selection
         preSel = sel.copy()
-        preSel[sel] = sl
-
 
         # Apply gain ratio in case of multichroic
         if (flatfield is not None) and ("scale" in flatfield.fields):
-            scl = flatfield.get_property("scale",det_uid=np.where(sel)[0],
+            scl = flatfield.get_property("scale", det_uid=np.where(sel)[0],
                                          default = 1.)
             lf_data *= np.repeat([scl],lf_data.shape[1],axis=0).T
 
         # Get Correlations
-        u, s, v = np.linalg.svd(lf_data[sl], full_matrices=False )
+        u, s, v = np.linalg.svd(lf_data, full_matrices=False )
+
         corr = np.zeros(ndet)
-        if par.get("doubleMode", False):
-            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm[sl]
+        if self._params.get("doubleMode", False):
+            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm
         else:
-            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm[sl]
+            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm
 
         # Get Gains
         # data = CM * gain
@@ -675,49 +644,30 @@ class AnalyzeLiveLF(Routine):
         
         return res
 
-    def getDarkModes(self, fdata, darkSel, frange, df, nf, nsamps, par, tod = None):
+    def getDarkModes(self, fdata, darkSel, frange, df, nf, nsamps):
         """
         @brief Get dark or thermal modes from dark detectors and thermometer
                data.
         @return correlated modes in frequency and time domain, plus thermometer
                 info.
         """
+        self.logger.info("Finding dark modes in freqs %s" % frange)        
         n_l, n_h=frange
         fc_inputs = []
 
         # Dark detector drift
-        if par["darkModesParams"].get("useDarks", False):
+        if self._darkModesParams.get("useDarks", False):
             dark_signal = fdata[darkSel,n_l:n_h].copy()
             fc_inputs.extend(list(dark_signal))
 
-        # TEST CRYOSTAT TEMPERATURE
-        if par["darkModesParams"].get("useTherm", False):
-            thermometers = []
-            for channel in par['thermParams']['channel']:
-                # gather thermometer data
-                thermometer = tod.get_hk( channel, fix_gaps=True)
-                if len(np.diff(thermometer).nonzero()[0]) > 0:
-                    thermometers.append(thermometer)
-                    
-            # perform a fourior analysis on thermometer data
-            # and append to the dark detector data
-            if len(thermometers) > 0:
-                thermometers = np.array(thermometers)
-                fth = np.fft.rfft( thermometers, nf )[:,n_l:n_h]
-                fc_inputs.extend(list(fth))
-
         fc_inputs = np.array(fc_inputs)
-
-        if par.get("useTaper",False):
-            taper = get_sine2_taper(frange, edge_factor = 6)
-            fc_inputs *= np.repeat([taper],len(fc_inputs),axis=0)
 
         # Normalize modes
         fc_inputs /= np.linalg.norm(fc_inputs, axis=1)[:, np.newaxis]
 
         # Obtain main svd modes to deproject from data
-        if par["darkModesParams"].get("useSVD", False):
-            Nmodes = par["darkModesParams"].get("Nmodes", None)
+        if self._darkModesParams.get("useSVD", False):
+            Nmodes = self._darkModesParams.get("Nmodes", None)
             u, s, v = np.linalg.svd( fc_inputs, full_matrices=False )
             if Nmodes is None:
                 # drop the bottom 10%
@@ -732,164 +682,263 @@ class AnalyzeLiveLF(Routine):
             fcmodes, n_l, nsamps, df)
         cmodes /= np.linalg.norm(cmodes, axis=1)[:, np.newaxis]
         return fcmodes, cmodes, cmodes_dt
-
-
         
 
 class GetDriftErrors(Routine):
     def __init__(self, **params):
-        self._params = params
-        self._output_key = params.get('output_key', None)
-
+        """This routine obtains the pickle parameter DELive by performing
+        a high frequency analysis on the slow modes"""
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
+        self._driftFilter = params.get('driftFilter', None)
+        self._nmodes = params.get('nmodes', 1)
 
     def execute(self, store):
-        # Get Drift-Error
-        DE = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, nmodes = par["DEModes"], 
-                          highOrder=False, preSel=self.preLiveSel)
-        
+        tod = store.get(self.inputs.get('tod'))
+        nsamps = tod.nsamps
+
+        live = store.get(self.inputs.get('dets'))['live_final']
+
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
+        nmodes = self._nmodes
+
+        # find the range of frequencies of interests
+        n_l = 1
+        n_h = nextregular(int(round(self._driftFilter/df))) + 1
+
+        # get drift errors
+        ndets = len(live)
+        hf_data = fdata[live, n_l:n_h]
+
+        # remove first [nmodes] common modes
+        if nmodes > 0:
+            # find the correlation between different detectors
+            c = np.dot(hf_data, hf_data.T.conjugate())
+
+            # find the first few common modes in the detectors and
+            # deproject them
+            u, w, v = np.linalg.svd(c, full_matrices = 0)
+            kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
+            modes = np.dot(kernel, hf_data)
+            coeff = np.dot(modes, hf_data.T.conj())
+            hf_data -= np.dot(coeff.T.conj(), modes)
+
+        # compute the rms for the detectors
+        rms = np.zeros(ndets)
+        rms[live] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
+
         results = {
-            "DELive": DE
+            "DELive": rms
         }
 
-        store.set(self._output_key, results)
+        store.set(self.outputs.get('drift'), results)
 
 
-        
-def highFreqAnal(fdata, sel, range, nsamps,  
-                 nmodes=0, highOrder = False, preSel = None,
-                 scanParams = None):
-    """
-    @brief Find noise RMS, skewness and kurtosis over a frequency band
-    """
-    ndet = len(sel)
-
-    # get the high frequency fourior modes
-    hf_data = fdata[sel,range[0]:range[1]]
-    if nmodes > 0:
-        # see if there is anything preselected
-        if preSel is None:
-            preSel = np.ones(sel.sum(),dtype=bool)
-        else:
-            preSel = preSel[sel]
-
-        # find the correlation between different detectors
-        c = np.dot(hf_data[preSel],hf_data[preSel].T.conjugate())
-
-        # find the first few common modes in the detectors and
-        # deproject them
-        u, w, v = np.linalg.svd(c, full_matrices = 0)
-        kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
-        modes = np.dot(kernel,hf_data[preSel])
-        coeff = np.dot(modes,hf_data.T.conj())
-        hf_data -= np.dot(coeff.T.conj(),modes)
-
-    # compute the rms for the detectors
-    rms = np.zeros(ndet)
-    rms[sel] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
-
-    # if we are interested in high order effects, skew and kurtosis will
-    # be calculated here
-    if highOrder:
-        hfd, _ = get_time_domain_modes( hf_data, 1, nsamps)
-        skewt = stat.skewtest(hfd,axis=1)
-        kurtt = stat.kurtosistest(hfd,axis=1)
-        if scanParams is not None:
-            T = scanParams["T"]
-            pivot = scanParams["pivot"]
-            N = scanParams["N"]
-            f = float(hfd.shape[1])/nsamps
-            t = int(T*f); p = int(pivot*f)
-            prms = []; pskewt = []; pkurtt = []
-            for c in xrange(N):
-                # i see this as calculating the statistics for each
-                # swing (no turning part) so the statistics is not
-                # affected by the scan
-                prms.append(hfd[:,c*t+p:(c+1)*t+p].std(axis=1))
-                pskewt.append(stat.skewtest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
-                pkurtt.append(stat.kurtosistest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
-            prms = np.array(prms).T
-            pskewt = np.array(pskewt)
-            pkurtt = np.array(pkurtt)
-            return (rms, skewt, kurtt, prms, pskewt, pkurtt)
-        else:
-            return (rms, skewt, kurtt)
-    else:
-        return rms
-
-
-class AnalyzeMF(Routine):
+class AnalyzeLiveMF(Routine):
     def __init__(self, **params):
-        self._params = params
+        """This routine looks at the mid-frequency and perform a 
+        high-freq like analysis to get the pickle parameter MFE"""
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._midFreqFilter = params.get("midFreqFilter", None)
-        self._output_key = params.get("output_key", None)
-
+        self._nmodes = params.get("nmodes", 1)
 
     def execute(self, store):
-        # get the frequency range to work on
-        n_l = int(self._midFreqFilter[0]/df))
-        n_h = int(self._midFreqFilter[1]/df))        
+        tod = store.get(self.inputs.get('tod'))
+        nsamps = tod.nsamps
 
-        # perform a high frequency like analysis on this range
-        MFE = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, nmodes = par["MFEModes"], 
-                             highOrder = False, preSel = self.preLiveSel)
+        live = store.get(self.inputs.get('dets'))['live_final']
+
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+
+        scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
+        nmodes = self._nmodes
+
+        # get the frequency range to work on
+        n_l = int(self._midFreqFilter[0]/df)
+        n_h = int(self._midFreqFilter[1]/df)
+
+        # get drift errors
+        ndets = len(live)
+        hf_data = fdata[live, n_l:n_h]
         
+        # remove first [nmodes] common modes
+        if nmodes > 0:
+            self.logger.info("Deprojecting %d modes" % nmodes)
+            # find the correlation between different detectors
+            c = np.dot(hf_data, hf_data.T.conjugate())
+
+            # find the first few common modes in the detectors and
+            # deproject them
+            u, w, v = np.linalg.svd(c, full_matrices = 0)
+            kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
+            modes = np.dot(kernel, hf_data)
+            coeff = np.dot(modes, hf_data.T.conj())
+            hf_data -= np.dot(coeff.T.conj(), modes)
+
+        # compute the rms for the detectors
+        rms = np.zeros(ndets)
+        rms[live] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
+
         results = {
-            "MFELive": MFE
+            "MFELive": rms
         }
 
-        store.set(self._output_key, results)
+        store.set(self.outputs.get('drift'), results)
 
 
 class AnalyzeHF(Routine):
     def __init__(self, **params):
+        """This routine analyzes both live and dark detectors in
+        the high frequency band"""
+        Routine.__init__(self)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
+        self._getPartial = params.get('getPartial', False)
+        self._highFreqFilter = params.get('highFreqFilter', None)
+        self._nmodes_live = params.get('nLiveModes', 1)
+        self._nmodes_dark = params.get('nDarkModes', 1)
+        self._highOrder = params.get('highOrder', False)
         self._params = params
 
     def execute(self, store):
+        # load relevant data from the data store
+        tod = store.get(self.inputs.get('tod'))
+        nsamps = tod.nsamps
+        ndets = len(tod.info.det_uid)
+
+        live = store.get(self.inputs.get('dets'))['live_final']
+        dark = store.get(self.inputs.get('dets'))['dark_final']
+
+        fft_data = store.get(self.inputs.get('fft'))
+        fdata = fft_data['fdata']
+        df = fft_data['df']
+
+        scan = store.get(self.inputs.get('scan'))
+        nmodes_live = self._nmodes_live
+        nmodes_dark = self._nmodes_dark
+
         # get the range of frequencies to work with
-        n_l = int(round(par["highFreqFilter"][0]/df))
-        n_h = int(round(par["highFreqFilter"][1]/df))
+        n_l = int(round(self._highFreqFilter[0]/df))
+        n_h = int(round(self._highFreqFilter[1]/df))
+
         # make sure that n_h is a number that's optimized in fft
         n_h = nextregular(n_h-n_l) + n_l
 
+        # empty dictionary to store the results
+        results = {}
+
         # if partial is labeled the analysis will be carried out
         # for each individual scan between the turnning points
-        if not(par["getPartial"]):
-            rms, skewt, kurtt = highFreqAnal(fdata, live, [n_l,n_h], self.ndata, 
-                                           nmodes=par["HFLiveModes"], 
-                                           highOrder=True, preSel = self.preLiveSel)
+        # TODO: There is still some problem with partial analysis
+        if not(self._getPartial):
+            self.logger.info("Performing partial analysis")
+            rms, skewt, kurtt = self.highFreqAnal(fdata, live, [n_l,n_h], nsamps,
+                                                  highOrder=self._highOrder,
+                                                  nmodes=nmodes_live)
         else:
-            rms, skewt, kurtt, prms, pskewt, pkurtt=highFreqAnal(fdata, live, 
-                                           [n_l,n_h], self.ndata, nmodes = par["HFLiveModes"], 
-                                           highOrder=True, preSel=self.preLiveSel, 
-                                           scanParams=self.scan)
+            self.logger.info("Performing non-partial analysis")
+            rms, skewt, kurtt, prms, pskewt, pkurtt = self.highFreqAnal(fdata, live, 
+                                                                        [n_l,n_h],
+                                                                        nsamps,
+                                                                        nmodes=nmodes_live,
+                                                                        highOrder=self._highOrder,
+                                                                        scanParams=scan)
 
             # store the statistics for partial
-            results = {}
-            results["partialRMSLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
-            results["partialSKEWLive"] = np.zeros([self.ndet,self.chunkParams["N"]]) 
-            results["partialKURTLive"] = np.zeros([self.ndet,self.chunkParams["N"]]) 
-            results["partialSKEWPLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
-            results["partialKURTPLive"] = np.zeros([self.ndet,self.chunkParams["N"]])
+            results["partialRMSLive"] = np.zeros([ndets, scan["N"]])
+            results["partialSKEWLive"] = np.zeros([ndets, scan["N"]]) 
+            results["partialKURTLive"] = np.zeros([ndets, scan["N"]]) 
+            results["partialSKEWPLive"] = np.zeros([ndets, scan["N"]])
+            results["partialKURTPLive"] = np.zeros([ndets, scan["N"]])
+
             results["partialRMSLive"][live] =  prms
-            results["partialSKEWLive"][live] = pskewt.T[:,0]
-            results["partialKURTLive"][live] = pkurtt.T[:,0]
-            results["partialSKEWPLive"][live] = pskewt.T[:,1]
-            results["partialKURTPLive"][live] = pkurtt.T[:,1]
+            results["partialSKEWLive"][live] = pskewt.T[:, 0]
+            results["partialKURTLive"][live] = pkurtt.T[:, 0]
+            results["partialSKEWPLive"][live] = pskewt.T[:, 1]
+            results["partialKURTPLive"][live] = pkurtt.T[:, 1]
             
         # store the statistics for global
         results["rmsLive"] = rms
-        results["skewLive"] = np.zeros(self.ndet)
-        results["kurtLive"] = np.zeros(self.ndet)
-        results["skewpLive"] = np.zeros(self.ndet)
-        results["kurtpLive"] = np.zeros(self.ndet)
+        results["skewLive"] = np.zeros(ndets)
+        results["kurtLive"] = np.zeros(ndets)
+        results["skewpLive"] = np.zeros(ndets)
+        results["kurtpLive"] = np.zeros(ndets)
         results["skewLive"][live] = skewt[0]
         results["kurtLive"][live] = kurtt[0]
         results["skewpLive"][live] = skewt[1]
-        results["kurtpLive"][live] = kurtt[1]        
+        results["kurtpLive"][live] = kurtt[1]
 
         # analyze the dark detectors for the same frequency range
-        rms = highFreqAnal(fdata, dark, [n_l,n_h], self.ndata, nmodes = par["HFDarkModes"], 
-                             highOrder = False, preSel = self.preDarkSel)
+        self.logger.info("Analyze dark detectors")
+        rms = self.highFreqAnal(fdata, dark, [n_l,n_h], nsamps, nmodes=nmodes_dark, 
+                                highOrder=False)
+
         results["rmsDark"] = rms
 
+        store.set(self.outputs.get('hf_live'), results)
 
+    def highFreqAnal(self, fdata, sel, frange, nsamps, nmodes=0, highOrder=False,
+                     scanParams=None):
+        """
+        @brief Find noise RMS, skewness and kurtosis over a frequency band
+        """
+        self.logger.info("Analyzing freqs %s" % frange)
+        ndet = len(sel)
+
+        # get the high frequency fourior modes
+        hf_data = fdata[sel, frange[0]:frange[1]]
+
+        if nmodes > 0:
+            self.logger.info("Deprojecting %d modes" % nmodes)
+            # find the correlation between different detectors
+            c = np.dot(hf_data,hf_data.T.conjugate())
+
+            # find the first few common modes in the detectors and
+            # deproject them
+            u, w, v = np.linalg.svd(c, full_matrices = 0)
+            kernel = v[:nmodes]/np.repeat([np.sqrt(w[:nmodes])],len(c),axis=0).T
+            modes = np.dot(kernel,hf_data)
+            coeff = np.dot(modes,hf_data.T.conj())
+            hf_data -= np.dot(coeff.T.conj(),modes)
+
+        # compute the rms for the detectors
+        rms = np.zeros(ndet)
+        rms[sel] = np.sqrt(np.sum(abs(hf_data)**2,axis=1)/hf_data.shape[1]/nsamps)
+
+        # if we are interested in high order effects, skew and kurtosis will
+        # be calculated here
+        if highOrder:
+            hfd, _ = get_time_domain_modes( hf_data, 1, nsamps)
+            skewt = stat.skewtest(hfd,axis=1)
+            kurtt = stat.kurtosistest(hfd,axis=1)
+            if scanParams is not None:
+                T = scanParams["T"]
+                pivot = scanParams["pivot"]
+                N = scanParams["N"]
+                f = float(hfd.shape[1])/nsamps
+                t = int(T*f); p = int(pivot*f)
+                prms = []; pskewt = []; pkurtt = []
+                for c in xrange(N):
+                    # i see this as calculating the statistics for each
+                    # swing (no turning part) so the statistics is not
+                    # affected by the scan
+                    prms.append(hfd[:,c*t+p:(c+1)*t+p].std(axis=1))
+                    pskewt.append(stat.skewtest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
+                    pkurtt.append(stat.kurtosistest(hfd[:,c*t+p:(c+1)*t+p],axis=1)) 
+                prms = np.array(prms).T
+                pskewt = np.array(pskewt)
+                pkurtt = np.array(pkurtt)
+                return (rms, skewt, kurtt, prms, pskewt, pkurtt)
+            else:
+                return (rms, skewt, kurtt)
+        else:
+            return rms        

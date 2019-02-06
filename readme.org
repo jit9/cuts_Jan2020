@@ -91,9 +91,11 @@ and their whereabouts in this repository.
 |---------------------+-----------------+-------------+-------------------|
 | steps applied       | moby2           | here        | name              |
 |---------------------+-----------------+-------------+-------------------|
+| cut mce             | process_cuts.py | cuts.py     | CutPartial        |
 | cut planets         | process_cuts.py | cuts.py     | CutPlanets        |
 | cut sources         | process_cuts.py | cuts.py     | CutSources        |
 | cut glitches        | process_cuts.py | cuts.py     | CutPartial        |
+| remove hwp          | process_cuts.py | cuts.py     | SubstractHWP      |
 | remove mean         | process_cuts.py | tod.py      | TransformTOD      |
 | detrend             | process_cuts.py | tod.py      | TransformTOD      |
 | remove filter gain  | process_cuts.py | tod.py      | TransformTOD      |
