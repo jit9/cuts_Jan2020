@@ -3,19 +3,20 @@ from todloop.tod import TODLoader
 
 from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
-
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
-
-from report import Summarize
+from report import Summarize, PrepareDataLabel
 
 # initialize the pipeline
 loop = TODLoop()
 
 # specify the list of tods to go through
-loop.add_tod_list('/home/lmaurin/TODLists/2016_ar3_season_nohwp.txt')
+# loop.add_tod_list('/home/lmaurin/TODLists/2016_ar3_season_nohwp.txt')
+loop.add_tod_list("data/2016_ar3_train.txt")
 
-# add routines to the pipeline
+################################
+# add routines to the pipeline #
+################################
 
 # add a routine to load tod
 loader_params = {
@@ -95,7 +96,7 @@ transform_params = {
     'remove_median': True,
     'detrend': False,
     'remove_filter_gain': False,
-    'n_downsample': 4,  # reduction with 2^4 factor
+    'n_downsample': 1,  # reduction with 2^n factor
 }
 loop.add_routine(TransformTOD(**transform_params))
 
@@ -294,9 +295,25 @@ summary_params = {
         'hf': 'hf',
         'jumps': 'jumps',
     },
-    'outpath': 'summary.pickle',
+    'outputs': {
+        'report': 'report',
+    }
 }
 loop.add_routine(Summarize(**summary_params))
 
+# save report and TOD data into an h5 file for
+# future machine learning pipeline
+prepare_params = {
+    'inputs': {
+        'tod': 'tod',
+        'report': 'report',
+    },
+    'pickle_file': '/home/lmaurin/cuts/s16/pa3_f90/c10/pa3_f90_s16_c10_v1_results.pickle',
+    'output_file': 'outputs/dataset.h5',
+    'group': 'train',
+    'downsample': 10,
+}
+loop.add_routine(PrepareDataLabel(**prepare_params))
+
 # run pipeline
-loop.run(100,101)
+loop.run(0,1)

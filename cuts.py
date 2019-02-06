@@ -371,8 +371,8 @@ class FindJumps(Routine):
                                            self._window)
         # store the jumps values
         crit = {
-            'jumpLive': {'values': jumps },
-            'jumpDark': {'values': jumps }
+            'jumpLive': jumps,
+            'jumpDark': jumps,
         }
         
         # save to data store
