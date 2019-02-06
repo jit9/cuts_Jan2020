@@ -58,13 +58,13 @@ An actual working example of a routine is like this
 class FindJumps(Routine):
     def __init__(self, **params):
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._dsStep = params.get('dsStep', None)
         self._window = params.get('window', None)
 
     def execute(self, store):
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         # find jumps
         jumps = moby2.libactpol.find_jumps(tod.data,
@@ -77,12 +77,30 @@ class FindJumps(Routine):
         }
         
         # save to data store
-        store.set(self._output_key, crit)
+        store.set(self.outputs.get('jumps'), crit)
 #+END_SRC
-
 This showcases the typical structure of a routine. One first retrieves
 the relevant data from the data store, and export the transformed data
 back to the data store after processing.
+
+The parameters are provided in a driver program (~process_cuts.py~), with
+the relevant section that looks like
+#+BEGIN_SRC python
+# add a routine to find jumps in TOD
+jump_params = {
+    'inputs': {
+        'tod': 'tod'
+    },
+    'outputs':{
+        'jumps': 'jumps'
+    },
+    'dsStep': 4,
+    'window': 1,
+}
+loop.add_routine(FindJumps(**jump_params))
+#+END_SRC
+Here ~loop~ refers to an underlying loop that will iterate over a list of
+TODs.
 
 ** The Cut Pipeline 
 Here is a rough sketch of some of the routines in the existing pipeline
@@ -115,7 +133,49 @@ and their whereabouts in this repository.
   analysis, scan analysis, etc.
 - utils.py: some utility functions such ~nextregular~ for fft,
   preselection functions
-- extra.py: some routines from moby2 that are not used are placed here
-  for completeness
+- report.py: routines related to reporting the results of analysis
 - process_cuts: the driver program, it defines the pipeline and
   specifies the parameters inputs for each routine.
+
+** Status Quo
+Currently the pipeline consists of the following routines (example output):
+#+BEGIN_SRC 
+2019-02-06 03:05:07,404 [INFO] TODLoop: Added routine: TODLoader
+2019-02-06 03:05:07,404 [INFO] TODLoop: Added routine: CutSources
+2019-02-06 03:05:07,404 [INFO] TODLoop: Added routine: CutPlanets
+2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: RemoveSyncPickup
+2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: CutPartial
+2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: TransformTOD
+2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: AnalyzeScan
+2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: GetDetectors
+2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: CalibrateTOD
+2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: FindJumps
+2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: FouriorTransform
+2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeDarkLF
+2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeLiveLF
+2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: GetDriftErrors
+2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeLiveMF
+2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeHF
+2019-02-06 03:05:07,407 [INFO] TODLoop: Added routine: Summarize
+#+END_SRC
+The parameters that can be computed include
+#+BEGIN_SRC 
+['darkRatioLive',
+ 'corrLive',
+ 'corrDark',
+ 'kurtLive',
+ 'normLive',
+ 'kurtpLive',
+ 'normDark',
+ 'MFELive',
+ 'skewLive',
+ 'gainLive',
+ 'DELive',
+ 'gainDark',
+ 'jumpDark',
+ 'rmsDark',
+ 'jumpLive',
+ 'rmsLive',
+ 'darkSel',
+ 'skewpLive']
+#+END_SRC
