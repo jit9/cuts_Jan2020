@@ -1,7 +1,9 @@
 * act-cutflow 
-
-In this project I am trying to re-organize the cuts pipeline codes in ACT
-and break them into reusable pieces. 
+In this project I am trying to re-organize the cuts pipeline codes in
+ACT and break them into reusable pieces. This will allow us to build
+more sophisticated pipelines on top of what's existing easily. It also
+allow us to analyze the impacts of each step applied to the pipeline 
+independently. 
 
 ** Architecture
 The basic unit in the analysis is called a ~Routine~. It represents a
@@ -72,8 +74,8 @@ class FindJumps(Routine):
                                            self._window)
         # store the jumps values
         crit = {
-            'jumpLive': {'values': jumps },
-            'jumpDark': {'values': jumps }
+            'jumpLive': jumps,
+            'jumpDark': jumps,
         }
         
         # save to data store
@@ -157,7 +159,40 @@ Currently the pipeline consists of the following routines (example output):
 2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeLiveMF
 2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeHF
 2019-02-06 03:05:07,407 [INFO] TODLoop: Added routine: Summarize
+2019-02-06 03:05:07,407 [INFO] TODLoop: Added routine: PrepareDataLabel
 #+END_SRC
+A brief description of each of these routines and where to find it
+|------------------+---------------------------------------------------+-------------|
+| Routine          | Description                                       | Location    |
+|------------------+---------------------------------------------------+-------------|
+| TODLoader        | Load TOD into data store                          | todloop     |
+| CutSources       | Remove sources from TOD data                      | cuts.py     |
+| CutPoints        | Remove planet from TOD data                       | cuts.py     |
+| RemoveSyncPickup | Remove sync pickup from TOD data                  | cuts.py     |
+| Cut Partial      | Remove glitches and MCE errors                    | cuts.py     |
+| TransformTOD     | Downsampling, detrend, remove mean, etc           | tod.py      |
+| AnalyzeScan      | Find scan freq and other scan parameters          | analysis.py |
+| GetDetectors     | Find live and dark detector candidates            | tod.py      |
+| CalibrateTOD     | Calibrate to pW using flatfield and responsivity  | tod.py      |
+| FindJumps        | Find jumps and calculate jumpLive, jumpDark       | cuts.py     |
+| FouriorTransform | Simple fourior transform                          | tod.py      |
+| AnalyzeDarkLF    | Study dark detectors in low frequency, calculate  | analysis.py |
+|                  | corrDark, normDark, gainDark                      |             |
+| AnalyzeLiveLF    | Study live detectors in low frequency, calculate  | analysis.py |
+|                  | corrLive, normLive, gainLive, darkRatioLive       |             |
+| GetDriftErrors   | Study the slow modes and calculate DELive         | analysis.py |
+| AnalyzeLiveMF    | Study the live detectors in mid frequency,        | analysis.py |
+|                  | calculate MFELive                                 |             |
+| AnalyzeHF        | Study both the live and dark detectors in high    | analysis.py |
+|                  | frequency and calculate rmsLive, kurtLive,        |             |
+|                  | skewLive, rmsDark                                 |             |
+| Summarize        | Get the results from previous routine and combine | report.py   |
+|                  | them into a dictionary                            |             |
+| PrepareDataLabel | Load analysis results and sel from Pickle file    | report.py   |
+|                  | to create an h5 file which can be supplied to     |             |
+|                  | the mlpipe pipeline                               |             |
+|------------------+---------------------------------------------------+-------------|
+
 The parameters that can be computed include
 #+BEGIN_SRC 
 ['darkRatioLive',
@@ -179,3 +214,4 @@ The parameters that can be computed include
  'darkSel',
  'skewpLive']
 #+END_SRC
+
