@@ -13,6 +13,7 @@ loop = TODLoop()
 # specify the list of tods to go through
 # loop.add_tod_list('/home/lmaurin/TODLists/2016_ar3_season_nohwp.txt')
 loop.add_tod_list("data/2016_ar3_train.txt")
+# loop.add_tod_list("data/2016_ar3_test.txt")
 
 ################################
 # add routines to the pipeline #
@@ -21,7 +22,6 @@ loop.add_tod_list("data/2016_ar3_train.txt")
 # add a routine to load tod
 loader_params = {
     'output_key': 'tod',
-    'repair_pointing': False
 }
 loop.add_routine(TODLoader(**loader_params))
 
@@ -310,10 +310,10 @@ prepare_params = {
     },
     'pickle_file': '/home/lmaurin/cuts/s16/pa3_f90/c10/pa3_f90_s16_c10_v1_results.pickle',
     'output_file': 'outputs/dataset.h5',
-    'group': 'train',
+    'group': 'test',
     'downsample': 10,
 }
 loop.add_routine(PrepareDataLabel(**prepare_params))
 
 # run pipeline
-loop.run(0,60)
+loop.run(0, 60)

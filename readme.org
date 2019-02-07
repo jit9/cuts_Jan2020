@@ -1,7 +1,9 @@
 * act-cutflow 
-
-In this project I am trying to re-organize the cuts pipeline codes in ACT
-and break them into reusable pieces. 
+In this project I am trying to re-organize the cuts pipeline codes in
+ACT and break them into reusable pieces. This will allow us to build
+more sophisticated pipelines on top of what's existing easily. It also
+allow us to analyze the impacts of each step applied to the pipeline 
+independently. 
 
 ** Architecture
 The basic unit in the analysis is called a ~Routine~. It represents a
@@ -72,8 +74,8 @@ class FindJumps(Routine):
                                            self._window)
         # store the jumps values
         crit = {
-            'jumpLive': {'values': jumps },
-            'jumpDark': {'values': jumps }
+            'jumpLive': jumps,
+            'jumpDark': jumps,
         }
         
         # save to data store
@@ -157,6 +159,7 @@ Currently the pipeline consists of the following routines (example output):
 2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeLiveMF
 2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeHF
 2019-02-06 03:05:07,407 [INFO] TODLoop: Added routine: Summarize
+2019-02-06 03:05:07,407 [INFO] TODLoop: Added routine: PrepareDataLabel
 #+END_SRC
 The parameters that can be computed include
 #+BEGIN_SRC 
@@ -179,3 +182,99 @@ The parameters that can be computed include
  'darkSel',
  'skewpLive']
 #+END_SRC
+** Descriptions of Routines
+A brief description of each of these routines and where to find it
+|------------------+---------------------------------------------------+-------------|
+| *Routine*        | *Description*                                     | *Location*  |
+|------------------+---------------------------------------------------+-------------|
+| TODLoader        | Load TOD into data store                          | todloop     |
+|------------------+---------------------------------------------------+-------------|
+| CutSources       | Remove sources from TOD data                      | cuts.py     |
+|------------------+---------------------------------------------------+-------------|
+| CutPlanets       | Remove planet from TOD data                       | cuts.py     |
+|------------------+---------------------------------------------------+-------------|
+| RemoveSyncPickup | Remove sync pickup from TOD data                  | cuts.py     |
+|------------------+---------------------------------------------------+-------------|
+| Cut Partial      | Remove glitches and MCE errors                    | cuts.py     |
+|------------------+---------------------------------------------------+-------------|
+| TransformTOD     | Downsampling, detrend, remove mean, etc           | tod.py      |
+|------------------+---------------------------------------------------+-------------|
+| AnalyzeScan      | Find scan freq and other scan parameters          | analysis.py |
+|------------------+---------------------------------------------------+-------------|
+| GetDetectors     | Find live and dark detector candidates            | tod.py      |
+|------------------+---------------------------------------------------+-------------|
+| CalibrateTOD     | Calibrate to pW using flatfield and responsivity  | tod.py      |
+|------------------+---------------------------------------------------+-------------|
+| FindJumps        | Find jumps and calculate jumpLive, jumpDark       | cuts.py     |
+|------------------+---------------------------------------------------+-------------|
+| FouriorTransform | Simple fourior transform                          | tod.py      |
+|------------------+---------------------------------------------------+-------------|
+| AnalyzeDarkLF    | Study dark detectors in low frequency, calculate  | analysis.py |
+|                  | corrDark, normDark, gainDark                      |             |
+|------------------+---------------------------------------------------+-------------|
+| AnalyzeLiveLF    | Study live detectors in low frequency, calculate  | analysis.py |
+|                  | corrLive, normLive, gainLive, darkRatioLive       |             |
+|------------------+---------------------------------------------------+-------------|
+| GetDriftErrors   | Study the slow modes and calculate DELive         | analysis.py |
+|------------------+---------------------------------------------------+-------------|
+| AnalyzeLiveMF    | Study the live detectors in mid frequency,        | analysis.py |
+|                  | calculate MFELive                                 |             |
+|------------------+---------------------------------------------------+-------------|
+| AnalyzeHF        | Study both the live and dark detectors in high    | analysis.py |
+|                  | frequency and calculate rmsLive, kurtLive,        |             |
+|                  | skewLive, rmsDark                                 |             |
+|------------------+---------------------------------------------------+-------------|
+| Summarize        | Get the results from previous routine and combine | report.py   |
+|                  | them into a dictionary                            |             |
+|------------------+---------------------------------------------------+-------------|
+| PrepareDataLabel | Load analysis results and sel from Pickle file    | report.py   |
+|                  | to create an h5 file which can be supplied to     |             |
+|                  | the mlpipe pipeline                               |             |
+|------------------+---------------------------------------------------+-------------|
+
+
+** Major Differences
+While breaking the moby2 cuts codes into individual components. There
+are some changes made to the pipeline for exploration. Here is a list
+of them:
+
+- Pre-selection
+Pre-selection in moby2 requires a fine tuning of parameters. In particular, 
+the ~presel_by_group~ function alone requires 5 parameters to tune. The
+~presel_by_median~ function requires 3 parameters to tune. Since our objective
+is to reduce the human intervention as much as possible, the pre-selection
+is removed. The idea is to use some smarter algorithms to replace this 
+fine tuning process. More on this later. 
+
+- Partial statistics
+For the high frequency analysis, the original pipeline in moby2 performs
+the analysis on each chunk in the scan (between turning points). This is
+not enabled for now for simplicity. 
+
+** Machine Learning
+The ~PrepareDataLabel~ routine makes way for the machine learning
+study by preparing an h5 file with all the necessary data to train
+machine learning models that can directly be supplied to the machine
+learning pipeline codes ([[https://github.com/guanyilun/mlpipe][~mlpipe~]]). An example output from this
+machine learning pipeline is shown below
+#+BEGIN_SRC 
+  == VALIDATION RESULTS: ==
+  
+    epoch    batch  model               loss      base    accuracy    tp    tn    fp    fn    precision    recall        f1     time/s
+  -------  -------  ---------------  -------  --------  ----------  ----  ----  ----  ----  -----------  --------  --------  ---------
+        0        0  KNNModel-3       2.05077  0.422877    0.940625  6864  9089   699   308     0.907576  0.957055  0.931659  2.09715
+        0        0  KNNModel-7       1.7005   0.422877    0.950767  7088  9037   751    84     0.904197  0.988288  0.944374  2.09129
+        0        0  RandomForest-5   1.41335  0.422877    0.95908   7154  9112   676    18     0.913665  0.99749   0.95374   0.0665109
+        0        0  KNNModel-5       1.81862  0.422877    0.947347  7012  9055   733   160     0.905358  0.977691  0.940135  2.08214
+        0        0  XGBoost          1.38688  0.422877    0.959847  7157  9122   666    15     0.914866  0.997909  0.954585  0.0552425
+        0        0  DecisionTree     1.86952  0.422877    0.945873  6862  9180   608   310     0.918608  0.956776  0.937304  0.0112839
+        0        0  RandomForest-20  1.40724  0.422877    0.959257  7153  9116   672    19     0.914121  0.997351  0.953924  0.178965
+        0        0  SVCModel         1.76771  0.422877    0.948821  7172  8920   868     0     0.89204   1         0.94294   5.48178
+        0        0  RandomForest-10  1.40521  0.422877    0.959316  7157  9113   675    15     0.913815  0.997909  0.954012  0.102943
+#+END_SRC
+It shows that even after removing some major fine tuning steps we can
+achieve reasonably good results. This is a hint that the existing cut
+pipeline can be simplified furthur with the help of machine learning
+techniques.
+
+
