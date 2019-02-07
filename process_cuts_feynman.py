@@ -149,7 +149,7 @@ def add_cut_routines(loop):
                      "ff_actpol3_2015_c9_w1_v2b_mix90-150_it9_actpol3_2015_c9_w2_photon_mix90-150_it7.dict",
         'config': [{
             "type": "depot_cal",
-            "depot": "/mnt/act3/users/yilun/share/depot",
+            "depot": DEPOT,
             "tag": "pa3_s16_BS",
             "name": "biasstep"
         }, {
