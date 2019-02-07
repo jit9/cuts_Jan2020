@@ -1,4 +1,4 @@
 *~
 todloop
 *.pyc
-outputs
+*.h5
