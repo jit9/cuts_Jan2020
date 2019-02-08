@@ -14,11 +14,9 @@ loop.add_tod_list("data/2016_ar3_train.txt")
 ################################
 
 # add a routine to load tod
-loader_params = {
-    'output_key': 'tod',
-}
-loop.add_routine(TODLoader(**loader_params))
+loop.add_routine(TODLoader(output_key='tod'))
 
+# add the routine to compute jesse's features
 params = {
     'inputs': {
         'tod': 'tod',
@@ -29,5 +27,5 @@ params = {
 }
 loop.add_routine(JesseFeatures(**params))
 
-# run the pipeline for the first pipeline
+# run the pipeline for the first tod
 loop.run(0, 1)

@@ -4,6 +4,28 @@ ACT and break them into reusable pieces. This will allow us to build
 more sophisticated pipelines on top of what's existing easily. It also
 allow us to analyze the impacts of each step applied to the pipeline 
 independently. 
+** Run the codes
+The codes here depend on the todloop project which is basically a giant
+loop to iterate through a list of TODs. To install todloop,
+#+BEGIN_SRC sh
+pip install git+https://github.com/guanyilun/todloop
+#+END_SRC
+Most of the scripts in this repo contain only definition of
+different ~Routine~ (more on this later). These routines can be added
+to a pipeline that executes on a list of TODs. A simple pipeline is
+given in ~test.py~ which consists of only two routines. The first routine
+loads the TOD and the second routine compute a few features of the loaded
+TOD. To run it
+#+BEGIN_SRC sh
+python test.py
+#+END_SRC
+The (adapted version of) cut pipeline is defined in ~process_cuts.py~
+(for running on hermes) and ~process_cuts_feynman.py~ (for running on
+feynman). For example, on feynman,
+#+BEGIN_SRC sh
+python process_cuts_feynman.py
+#+END_SRC
+This will run the cut pipeline on a list of 80 TODs.
 
 ** Architecture
 The basic unit in the analysis is called a ~Routine~. It represents a
@@ -231,7 +253,6 @@ A brief description of each of these routines and where to find it
 |                  | to create an h5 file which can be supplied to     |             |
 |                  | the mlpipe pipeline                               |             |
 |------------------+---------------------------------------------------+-------------|
-
 
 ** Major Differences
 While breaking the moby2 cuts codes into individual components. There
