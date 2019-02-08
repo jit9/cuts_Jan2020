@@ -23,7 +23,7 @@ class JesseFeatures(Routine):
         N = tod.nsamps
         
         # compute the feature 1 and 2
-        print("Computing feature 1 and 2...")
+        self.logger.info("Computing feature 1 and 2...")
 
         window = signal.hann(N)
 
@@ -38,15 +38,15 @@ class JesseFeatures(Routine):
 
         # non-zero mask
         m = (av != 0)
-        pav_low[m] = np.mean(ywf[m, :1000]) / av[m]
-        pav_high[m] = np.mean(ywf[m, 1100:3000]) / av[m]
+        pav_low[m] = np.mean(ywf[m, :1000], axis=1) / av[m]
+        pav_high[m] = np.mean(ywf[m, 1100:3000], axis=1) / av[m]
         
         # compute the feature 3: rms 
-        print("Computing feature 3...")
+        self.logger.info("Computing feature 3...")
         rmx = np.std(tod.data, axis=1)
 
         # compute the feature 5: a 60 secs feature that jesse proposed
-        print("Computing feature 5...")        
+        self.logger.info("Computing feature 5...")        
         # here we need to take into account that tod may be
         # down-sampled beforehand
         ds = tod.info.downsample_level
@@ -62,7 +62,7 @@ class JesseFeatures(Routine):
         }
 
         # check the results
-        print(results)
+        self.logger.info(results)
             
         # share the results in the data store
         store.set(self.outputs.get('results'), results)

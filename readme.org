@@ -10,12 +10,12 @@ loop to iterate through a list of TODs. To install todloop,
 #+BEGIN_SRC sh
 pip install git+https://github.com/guanyilun/todloop
 #+END_SRC
-Most of the scripts in this repo contain only definition of
-different ~Routine~ (more on this later). These routines can be added
-to a pipeline that executes on a list of TODs. A simple pipeline is
-given in ~test.py~ which consists of only two routines. The first routine
-loads the TOD and the second routine compute a few features of the loaded
-TOD. To run it
+Most of the scripts in this repo contain only definition of different
+~Routine~ (more on this later). These routines can be added to a
+pipeline that executes on a list of TODs. A simple pipeline is given
+in ~test.py~ which consists of only two routines. The first routine
+loads the TOD, and the second routine computes a few features of the
+loaded TOD. To run it
 #+BEGIN_SRC sh
 python test.py
 #+END_SRC
@@ -276,7 +276,7 @@ not enabled for now for simplicity.
 The ~PrepareDataLabel~ routine makes way for the machine learning
 study by preparing an h5 file with all the necessary data to train
 machine learning models that can directly be supplied to the machine
-learning pipeline codes ([[https://github.com/guanyilun/mlpipe][~mlpipe~]]). An example output from this
+learning pipeline codes ([[https://github.com/guanyilun/mlpipe][mlpipe]]). An example output from this
 machine learning pipeline is shown below
 #+BEGIN_SRC 
   == VALIDATION RESULTS: ==
