@@ -1,5 +1,6 @@
-"""Use this script to explore other features other than
-those that Loïc is using. 
+"""Use this script to explore other features other than those that
+Loic is using.
+
 """
 from scipy import signal
 import numpy as np
@@ -27,7 +28,7 @@ class JesseFeatures(Routine):
         window = signal.hann(N)
 
         nf = nextregular(N)
-        ywf = np.abs(fft(tod*window*2.0/N, nf))
+        ywf = np.abs(fft(tod.data*window*2.0/N, nf))
 
         av = np.mean(ywf, axis=1)
 
@@ -38,7 +39,7 @@ class JesseFeatures(Routine):
         # non-zero mask
         m = (av != 0)
         pav_low[m] = np.mean(ywf[m, :1000]) / av[m]
-        pav_hi[m] = np.mean(ywf[m, 1100:3000]) / av[m]
+        pav_high[m] = np.mean(ywf[m, 1100:3000]) / av[m]
         
         # compute the feature 3: rms 
         print("Computing feature 3...")
@@ -49,17 +50,19 @@ class JesseFeatures(Routine):
         # here we need to take into account that tod may be
         # down-sampled beforehand
         ds = tod.info.downsample_level
-        shift = 24280. / ds
+        shift = int(24280 / ds)
         ff5 = np.mean(tod.data[:,:shift]-tod.data[:,-shift:], axis=1)
 
         # summarize the features into a dictionary 
         results = {
             'feat1': pav_low,
-            'feat2': pav_hi,
+            'feat2': pav_high,
             'feat3': rmx,
             'feat5': ff5,
         }
 
-        # share the results in the data store
+        # check the results
         print(results)
+            
+        # share the results in the data store
         store.set(self.outputs.get('results'), results)
