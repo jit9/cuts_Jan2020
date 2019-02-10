@@ -13,7 +13,19 @@ from utils import *
 
 class AnalyzeScan(Routine):
     def __init__(self, **params):
-        """This routine analyzes the scan pattern"""
+        """This routine analyzes the scan pattern. It takes in an
+        TOD and produces scan parameters including the scan freq,
+        when it pivot, number of scans. 
+
+        Inputs: 
+            tod: TOD data
+        Outputs:
+            scan_params: 
+                T: time per chunk
+                pivot: index of pivot
+                N: number of chunks
+                scan_freq: scan frequency
+        """
         Routine.__init__(self)
         self.inputs = params.get('inputs', None)
         self.outputs = params.get('outputs', None)
@@ -161,21 +173,27 @@ class AnalyzeScan(Routine):
 
 class AnalyzeTemperature(Routine):
     def __init__(self, **params):
-        """This routine will analyze the temperature of the TOD"""
+        """This routine will analyze the temperature of the TOD such as
+        measure the mean temperature and thermal drift, and suggest a
+        thermalCut
+
+        Inputs:
+            tod: TOD data
+        Outputs:
+            thermal: 
+                Temp: mean temperature
+                dTemp: thermal drift
+                temperatureCut: cuts based on the temperature
+        """
         Routine.__init__(self)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
+        self.inputs = params.get('inputs', None)
+        self.outputs = params.get('outputs', None)
         self._channel = params.get('channel', None)
         self._T_max = params.get('T_max', False)
         self._dT_max = params.get('dT_max', None)
 
     def execute(self, store):
-        """
-        @brief Measure the mean temperature and thermal drift, and
-               suggest a thermalCut
-        @return mean temperature, thermal drift and thermal cut flag
-        """
-        tod = store.get(self._input_key)
+        tod = store.get(self.inputs.get('tod'))
 
         Temp = None
         dTemp = None
@@ -209,7 +227,7 @@ class AnalyzeTemperature(Routine):
         }
         
         self.logger.debug(thermal_results)
-        store.set(self._output_key, thermal_results)
+        store.set(self.outputs.get('thermal'), thermal_results)
 
 
 class AnalyzeDarkLF(Routine):
