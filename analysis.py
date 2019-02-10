@@ -262,7 +262,6 @@ class AnalyzeDarkLF(Routine):
         band = frange.get("band", 0.070)
         Nwin = frange.get("Nwin", 1)
 
-        psel = []
         corr = []
         gain = []
         norm = []
@@ -286,32 +285,13 @@ class AnalyzeDarkLF(Routine):
                                  tod.nsamps, scan_freq)
 
             # append the results to the relevant lists
-            psel.append(r["preSel"])
             corr.append(r["corr"])
             gain.append(np.abs(r["gain"]))
             norm.append(r["norm"])
 
-        # count the decision for each frequency window, for example
-        # if we looked at 10 frequency window, psel may look like
-        # [S S U S S U S U S U] with S means selected as good and
-        # u means unselected (bad). Here we want to count the number
-        # of "votes" saying this detector is good
-        spsel = np.sum(psel, axis=0)
-
-        # get the highest amount of score that the detectors receive
-        # and use this as a threshold to judge the rest of the
-        # detectors
-        Nmax = spsel.max()
-
-        # For any detectors who are "voted" as good more than half
-        # of the maximum "votes" will be selected as good
-        psel50 = spsel >= Nmax/2.
-
-        # Normalize gain by the average gain of a good selection of
-        # detectors, here this selection is given by psel50 AND presel
-        # loop over the frequency windows and normalize respectively
-        for g, s in zip(gain, psel):
-            g /= np.mean(g[psel50*s])
+        # normalize gain
+        for g in gain:
+            g /= np.mean(g[sel])
             
         gain = np.array(gain)
         
@@ -319,15 +299,15 @@ class AnalyzeDarkLF(Routine):
         gain[np.isnan(gain)] = 0.
 
         # use mean as representative values for gain
-        mgain = ma.MaskedArray(gain, ~np.array(psel))
+        mgain = ma.MaskedArray(gain, ~np.array(sel))
         mgain_mean = mgain.mean(axis=0)
 
         # use max as representative values for corr
-        mcorr = ma.MaskedArray(corr, ~np.array(psel))
+        mcorr = ma.MaskedArray(corr, ~np.array(sel))
         mcorr_max = mcorr.max(axis=0)
 
         # use mean as representative values for norm
-        mnorm = ma.MaskedArray(norm, ~np.array(psel))
+        mnorm = ma.MaskedArray(norm, ~np.array(sel))
         mnorm_mean = mnorm.mean(axis=0)
         
         # export the values
@@ -336,7 +316,6 @@ class AnalyzeDarkLF(Routine):
         results["corrDark"] = mcorr_max.data,
         results["gainDark"] = mgain_mean.data
         results["normDark"] = mnorm_mean.data
-        results["darkSel"] = psel50.copy()  # not sure why copy is needed
 
         # save to the data store
         store.set(self.outputs.get('lf_dark'), results)
@@ -352,7 +331,7 @@ class AnalyzeDarkLF(Routine):
         res = {}
 
         # Scan frequency rejection
-        if self._params.get("cancelSync",False) and (scan_freq/df > 7):
+        if self._params.get("cancelSync", False) and (scan_freq/df > 7):
             i_harm = get_iharm(frange, df, scan_freq,
                                wide=self._params.get("wide",True))
             lf_data[:, i_harm] = 0.0
@@ -365,39 +344,29 @@ class AnalyzeDarkLF(Routine):
         cc = c/aa
 
         # Get Norm
-        ppar = self._params.get("presel",{})
         norm = np.zeros(ndet,dtype=float)
         fnorm = np.sqrt(np.abs(np.diag(c)))
         norm[sel] = fnorm*np.sqrt(2./nsamps)
         nnorm = norm/np.sqrt(nsamps)
 
-        # get a range of valid norm values 
-        nlim = ppar.get("normLimit",[0.,1e15])
-        if np.ndim(nlim) == 0:
-            nlim = [0, nlim]
-        normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
-        
-        # The number of sels are just overwhelmingly confusing
-        # To clarify for myself,
-        # - normSel: selects the detectors with good norm
-        # - sel: the initial selection of detectors specified
-        #        for this case it is selection of dark detectors
-        preSel = sel.copy()
-        
         # Get Correlations
         u, s, v = np.linalg.svd(lf_data, full_matrices=False)
         corr = np.zeros(ndet)
         if self._double_mode:
-            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm
+            corr[sel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm
         else:
-            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm
+            corr[sel] = np.abs(u[:,0])*s[0]/fnorm
 
         # Get Gains
         # data = CM * gain
         gain = np.zeros(ndet, dtype=complex)
-        gain[preSel] = np.abs(u[:, 0])
-        res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
-                    "cc": cc, "normSel": normSel})
+        gain[sel] = np.abs(u[:, 0])
+        res.update({
+            "corr": corr,
+            "gain": gain,
+            "norm": norm,
+            "cc": cc
+        })
         return res
 
 
@@ -406,7 +375,6 @@ class AnalyzeLiveLF(Routine):
         Routine.__init__(self)
         self.inputs = params.get('inputs', None)
         self.outputs = params.get('outputs', None)
-        self._output_key = params.get('output_key', None)
         self._freqRange = params.get('freqRange', None)
         self._separateFreqs = params.get('separateFreqs', False)
         self._full = params.get('fullReport', False)
@@ -420,19 +388,25 @@ class AnalyzeLiveLF(Routine):
         # the AnalyzeDarkLF
         
         # retrieve relevant data from store
+        # tod, number of detectors and number of samples
         tod = store.get(self.inputs.get('tod'))
         ndets = len(tod.info.det_uid)
         nsamps = tod.nsamps
-        
+
+        # retrieve detector lists
         live = store.get(self.inputs.get('dets'))['live_final']
+        dark = store.get(self.inputs.get('dets'))['dark_final']
+
+        # retrieve fft related data
         fft_data = store.get(self.inputs.get('fft'))
         fdata = fft_data['fdata']
         df = fft_data['df']
         nf = fft_data['nf']
 
+        # retrieve scan frequency
         scan_freq = store.get(self.inputs.get('scan'))['scan_freq']
-        darkSel = store.get(self.inputs.get('dark'))['darkSel']
 
+        # retrieve calibration data
         calData = store.get(self.inputs.get('cal'))
         respSel = calData['respSel']
         ff = calData['ff']
@@ -460,7 +434,7 @@ class AnalyzeLiveLF(Routine):
         preLiveSel = np.zeros(ndets, dtype=bool)
         liveSel = np.zeros(ndets, dtype=bool)
 
-        # initialize the vectors to store the statistics or live data
+        # initialize vectors to store the statistics for live data
         crit = {}
         crit["darkRatioLive"] = np.zeros(ndets, dtype=float)
         crit["corrLive"] = np.zeros(ndets, dtype=float)
@@ -481,13 +455,13 @@ class AnalyzeLiveLF(Routine):
         # loop over frequency band
         for fbSel,fbn in zip(fbandSel, fbands):
             all_data = []
-            
-            psel = []
+
+            sel = []            
             corr = []
             gain = []
             norm = []
             darkRatio = []
-            
+
             fcm = []
             cm = []
             cmdt = []
@@ -501,11 +475,11 @@ class AnalyzeLiveLF(Routine):
                     n_h = n_l + minFreqElem
 
                 if self._removeDark:
-                    if darkSel is None:
+                    if dark is None:
                         print "ERROR: no dark selection supplied"
                         return 0
 
-                    fcmi, cmi, cmdti = self.getDarkModes(fdata, darkSel, [n_l,n_h],
+                    fcmi, cmi, cmdti = self.getDarkModes(fdata, dark, [n_l,n_h],
                                                          df, nf, nsamps)
                     fcm.append(fcmi)
                     cm.append(cmi)
@@ -513,46 +487,40 @@ class AnalyzeLiveLF(Routine):
 
                 r = self.lowFreqAnal(fdata, live, [n_l,n_h], df, nsamps, scan_freq,
                                      fcmodes=fcmi, respSel=respSel, flatfield=flatfield)
-                
-                psel.append(r["preSel"])
+
+                sel.append(live)                
                 corr.append(r["corr"])
                 gain.append(np.abs(r["gain"]))
                 norm.append(r["norm"])
                 darkRatio.append(r["ratio"])
-                
+
                 if self._full:
                     all_data.append(r)
                     
-            spsel = np.sum(psel,axis=0)
-            Nmax = spsel.max()
-
-            psel50 = spsel >= Nmax/2.
-            
-            for g,s in zip(gain,psel):
-                g /= np.mean(g[psel50*s])
+            for g in gain:
+                g /= np.mean(g[live])
                 
             gain = np.array(gain)
             gain[np.isnan(gain)] = 0.
 
-            mgain = ma.MaskedArray(gain,~np.array(psel))
+
+            mgain = ma.MaskedArray(gain,~np.array(sel))
             mgain_mean = mgain.mean(axis=0)
-            mcorr = ma.MaskedArray(corr,~np.array(psel))
+            mcorr = ma.MaskedArray(corr,~np.array(sel))
 
             mcorr_max = mcorr.max(axis=0)
-            mnorm = ma.MaskedArray(norm,~np.array(psel))
+            mnorm = ma.MaskedArray(norm,~np.array(sel))
             mnorm_mean = mnorm.mean(axis=0)
 
             # summarize the results so far
             results = {
-                "preLiveSel": psel50,
-                "liveSel": psel50,
                 "corr": mcorr_max.data,
                 "gain": mgain_mean.data,
                 "norm": mnorm_mean.data,
             }
 
             if self._removeDark:
-                mdarkRatio = ma.MaskedArray(darkRatio,~np.array(psel))
+                mdarkRatio = ma.MaskedArray(darkRatio,~np.array(sel))
                 mdarkRatio_mean = mdarkRatio.mean(axis=0)
                 results['darkRatio'] = mdarkRatio_mean.data
 
@@ -618,24 +586,10 @@ class AnalyzeLiveLF(Routine):
         cc = c/aa
 
         # Get Norm
-        ppar = self._params.get("presel",{})
         norm = np.zeros(ndet,dtype=float)
         fnorm = np.sqrt(np.abs(np.diag(c)))
         norm[sel] = fnorm*np.sqrt(2./nsamps)
         nnorm = norm/np.sqrt(nsamps)
-
-        # get a range of valid norm values 
-        nlim = ppar.get("normLimit",[0.,1e15])
-        if np.ndim(nlim) == 0:
-            nlim = [0, nlim]
-        normSel = (nnorm > nlim[0])*(nnorm < nlim[1])
-        
-        # The number of sels are just overwhelmingly confusing
-        # To clarify for myself,
-        # - normSel: selects the detectors with good norm
-        # - sel: the initial selection of detectors specified
-        #        for this case it is selection of dark detectors
-        preSel = sel.copy()
 
         # Apply gain ratio in case of multichroic
         if (flatfield is not None) and ("scale" in flatfield.fields):
@@ -648,17 +602,17 @@ class AnalyzeLiveLF(Routine):
 
         corr = np.zeros(ndet)
         if self._params.get("doubleMode", False):
-            corr[preSel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm
+            corr[sel] = np.sqrt(abs(u[:,0]*s[0])**2+abs(u[:,1]*s[1])**2)/fnorm
         else:
-            corr[preSel] = np.abs(u[:,0])*s[0]/fnorm
+            corr[sel] = np.abs(u[:,0])*s[0]/fnorm
 
         # Get Gains
         # data = CM * gain
         gain = np.zeros(ndet, dtype=complex)
-        gain[preSel] = np.abs(u[:, 0])
+        gain[sel] = np.abs(u[:, 0])
         
-        res.update({"preSel": preSel, "corr": corr, "gain": gain, "norm": norm, 
-                    "dcoeff": dcoeff, "ratio": ratio, "cc": cc, "normSel": normSel})
+        res.update({"corr": corr, "gain": gain, "norm": norm, "dcoeff": dcoeff,
+                    "ratio": ratio, "cc": cc})
         
         return res
 
