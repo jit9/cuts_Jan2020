@@ -128,9 +128,9 @@ def add_cut_routines(loop):
             'dets': 'dets',        
         },
         'source': 'individual',
-        'live': BASE_DIR + 'live_pa3_s16_c10_v4.dict',
+        'live': BASE_DIR + 'live_pa3_f90_s16_c10_v4.dict',
         'dark': BASE_DIR + 'dark.dict',
-        'exclude': BASE_DIR + 'exclude_pa3_s16_c10_v4.dict'
+        'exclude': BASE_DIR + 'exclude_pa3_f90_s16_c10_v4.dict'
     }
     loop.add_routine(GetDetectors(**gd_params))
 

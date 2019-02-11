@@ -12,9 +12,6 @@ class FouriorTransform(Routine):
         Routine.__init__(self)
         self.inputs = params.get('inputs', None)
         self.outputs = params.get('outputs', None)
-        self._input_key = params.get('input_key', None)
-        self._output_key = params.get('output_key', None)
-        self._fft_data = params.get('fft_data', None)
 
     def execute(self, store):
         tod = store.get(self.inputs.get('tod'))

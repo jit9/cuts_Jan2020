@@ -9,11 +9,9 @@ from report import Summarize, PrepareDataLabel
 
 # initialize the pipelines
 train_loop = TODLoop()
-validate_loop = TODLoop()
 
 # specify the list of tods to go through
 train_loop.add_tod_list("data/2016_ar3_train.txt")
-validate_loop.add_tod_list("data/2016_ar3_validate.txt")
 
 ################################
 # add routines to the pipeline #
@@ -128,9 +126,9 @@ def add_cut_routines(loop):
             'dets': 'dets',        
         },
         'source': 'individual',
-        'live': BASE_DIR + 'live_pa3_s16_c10_v4.dict',
+        'live': BASE_DIR + 'live_pa3_f90_s16_c10_v4.dict',
         'dark': BASE_DIR + 'dark.dict',
-        'exclude': BASE_DIR + 'exclude_pa3_s16_c10_v4.dict'
+        'exclude': BASE_DIR + 'exclude_pa3_f90_s16_c10_v4.dict'
     }
     loop.add_routine(GetDetectors(**gd_params))
 
@@ -322,7 +320,7 @@ prepare_params = {
         'report': 'report',
     },
     'pickle_file': '/home/lmaurin/cuts/s16/pa3_f90/c10/pa3_f90_s16_c10_v1_results.pickle',    
-    'output_file': 'outputs/0211_dataset.h5',
+    'output_file': 'outputs/0212_dataset.h5',
     'group': 'train',
     'downsample': 10,
 }
@@ -332,6 +330,8 @@ train_loop.add_routine(PrepareDataLabel(**prepare_params))
 train_loop.run(0, 60)
 
 # work on validation data
+validate_loop = TODLoop()
+validate_loop.add_tod_list("data/2016_ar3_validate.txt")
 validate_loop = add_cut_routines(validate_loop)
 
 # save report and TOD data into an h5 file for
@@ -342,7 +342,7 @@ prepare_params = {
         'report': 'report',
     },
     'pickle_file': '/home/lmaurin/cuts/s16/pa3_f90/c10/pa3_f90_s16_c10_v1_results.pickle',
-    'output_file': 'outputs/0211_dataset.h5',
+    'output_file': 'outputs/0212_dataset.h5',
     'group': 'validate',
     'downsample': 10,
 }
