@@ -11,25 +11,15 @@ class Summarize(Routine):
         self.outputs = params.get('outputs', None)
 
     def execute(self, store):
-        # retrieve all the calculated results
-        lf_dark = store.get(self.inputs.get('lf_dark'))
-        lf_live = store.get(self.inputs.get('lf_live'))
-        mf = store.get(self.inputs.get('mf_live'))
-        hf = store.get(self.inputs.get('hf'))
-        drift = store.get(self.inputs.get('drift'))
-        jumps = store.get(self.inputs.get('jumps'))
-
+        # initialize an empty dictionary to store results
+        
         results = {}
-        results.update(lf_dark)
-        results.update(lf_live)
-        results.update(mf)
-        results.update(hf)
-        results.update(drift)
-        results.update(jumps)
+        # retrieve all the calculated results        
+        for key in self.inputs.keys():
+            results.update(store.get(key))
 
         self.logger.info("Successfully processed: %s" % results.keys())
         store.set(self.outputs.get('report'), results)
-
         
 class PrepareDataLabel(Routine):
     def __init__(self, **params):
@@ -42,8 +32,6 @@ class PrepareDataLabel(Routine):
         self._output_file = params.get('output_file', None)
         self._group_name = params.get('group', None)
         self._downsample = params.get('downsample', 1)
-        self._keys = ['corrLive', 'rmsLive', 'kurtLive', 'DELive', 'MFELive',
-                      'skewLive', 'normLive', 'darkRatioLive', 'jumpLive', 'gainLive']
         
     def initialize(self):
         # load pickle file
@@ -75,6 +63,7 @@ class PrepareDataLabel(Routine):
 
         # retrieve the calculated statustics
         report = store.get(self.inputs.get('report'))
+        keys = report.keys()
         
         # get relevant metadata for this tod from pickle file
         tod_name = self.get_name()
@@ -101,7 +90,7 @@ class PrepareDataLabel(Routine):
                 dataset[:] = data
 
             # save report to h5 file
-            for k in self._keys:
+            for k in keys:
                 dataset.attrs[k] = report[k][tes_det]
                 
             # save label
