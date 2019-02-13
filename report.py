@@ -12,11 +12,11 @@ class Summarize(Routine):
 
     def execute(self, store):
         # initialize an empty dictionary to store results
-        
         results = {}
-        # retrieve all the calculated results        
+        
+        # retrieve all the calculated results
         for key in self.inputs.keys():
-            results.update(store.get(key))
+            results.update(store.get(self.inputs[key]))
 
         self.logger.info("Successfully processed: %s" % results.keys())
         store.set(self.outputs.get('report'), results)
