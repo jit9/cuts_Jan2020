@@ -2,6 +2,7 @@ from todloop import Routine
 import cPickle, h5py, os
 import numpy as np
 
+
 class Summarize(Routine):
     def __init__(self, **params):
         """This routine aims to summarize the parameters derived
@@ -20,6 +21,7 @@ class Summarize(Routine):
 
         self.logger.info("Successfully processed: %s" % results.keys())
         store.set(self.outputs.get('report'), results)
+
         
 class PrepareDataLabel(Routine):
     def __init__(self, **params):

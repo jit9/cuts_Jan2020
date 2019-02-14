@@ -25,7 +25,12 @@ feynman). For example, on feynman,
 #+BEGIN_SRC sh
 python process_cuts_feynman.py
 #+END_SRC
-This will run the cut pipeline on a list of 80 TODs.
+On hermes,
+#+BEGIN_SRC sh
+python process_cuts_hermes.py
+#+END_SRC
+This will run the cut pipeline on a list of 80 TODs with 60 TODs used 
+for training and another 20 TODs used for validation. 
 
 ** Architecture
 The basic unit in the analysis is called a ~Routine~. It represents a
@@ -155,11 +160,15 @@ and their whereabouts in this repository.
 - tod.py: tod related routines
 - analysis.py: mainly the multi-freq analysis, also some temperature
   analysis, scan analysis, etc.
-- utils.py: some utility functions such ~nextregular~ for fft,
+- utils.py: some utility functions such ~nextregular~ for fft
   preselection functions
 - report.py: routines related to reporting the results of analysis
-- process_cuts: the driver program, it defines the pipeline and
-  specifies the parameters inputs for each routine.
+- features.py: design new features that may be useful
+- process_cuts_feynman: the driver program for feynman, it defines the
+  pipeline and specifies the parameters inputs for each routine
+- process_cuts_hermes: same script for hermes
+- process_cuts_features: experimental driver scripts to test
+- test.py: test driver script 
 
 ** Status Quo
 Currently the pipeline consists of the following routines (example output):
@@ -252,6 +261,8 @@ A brief description of each of these routines and where to find it
 | PrepareDataLabel | Load analysis results and sel from Pickle file    | report.py   |
 |                  | to create an h5 file which can be supplied to     |             |
 |                  | the mlpipe pipeline                               |             |
+|------------------+---------------------------------------------------+-------------|
+| JesseFeatures    | Calculate the 4 features that Jesse came up with  | features.py |
 |------------------+---------------------------------------------------+-------------|
 
 ** Major Differences
