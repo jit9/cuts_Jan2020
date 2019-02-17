@@ -325,6 +325,7 @@ prepare_params = {
     'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',    
     'output_file': 'outputs/dataset.h5',
     'group': 'train',
+    'downsample': 10,
     'remove_mean': True,    
 }
 train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
@@ -347,6 +348,7 @@ prepare_params = {
     'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',
     'output_file': 'outputs/dataset.h5',
     'group': 'validate',
+    'downsample': 10,
     'remove_mean': True,
 }
 validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
