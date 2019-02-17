@@ -1,6 +1,7 @@
 from todloop import Routine
 import cPickle, h5py, os
 import numpy as np
+import copy
 
 
 class Summarize(Routine):
@@ -34,6 +35,7 @@ class PrepareDataLabel(Routine):
         self._output_file = params.get('output_file', None)
         self._group_name = params.get('group', None)
         self._downsample = params.get('downsample', 1)
+        self._remove_mean = params.get('remove_mean', False)
         
     def initialize(self):
         # load pickle file
@@ -55,17 +57,23 @@ class PrepareDataLabel(Routine):
             self.logger.info("Creating group %s..." % self._group_name)            
             self._group = self._hf.create_group(self._group_name)
         except ValueError:
-            self.logger.info("%s exists, update instead" % self._group_name)            
+            self.logger.info("%s exists, update instead" % self._group_name)
             self._group = self._hf[self._group_name]
-            
         
     def execute(self, store):
         # retrieve tod
         tod = store.get(self.inputs.get('tod'))
-        
-        # retrieve the calculated statustics
+
+        # retrieve the calculated statustics 
         report = store.get(self.inputs.get('report'))
         keys = report.keys()
+
+        # remove mean if needed
+        if self._remove_mean:
+            report = copy.deepcopy(report)
+            self.logger.info("Remove means of the features...")
+            for k in keys:
+                report[k] -= np.mean(report[k])
         
         # get relevant metadata for this tod from pickle file
         tod_name = self.get_name()

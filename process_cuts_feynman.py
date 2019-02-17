@@ -325,6 +325,7 @@ prepare_params = {
     'output_file': 'outputs/dataset.h5',
     'group': 'train',
     'downsample': 10,
+    'remove_mean': True,    
 }
 train_loop.add_routine(PrepareDataLabel(**prepare_params))
 
@@ -346,6 +347,7 @@ prepare_params = {
     'output_file': 'outputs/dataset.h5',
     'group': 'validate',
     'downsample': 10,
+    'remove_mean': True,
 }
 validate_loop.add_routine(PrepareDataLabel(**prepare_params))
 
