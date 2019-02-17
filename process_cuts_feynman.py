@@ -40,7 +40,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod'
         },
-        'tag_source': 'pa3_f90_s16_c10_v1_source',
+        'tag_source': 'mr3_pa3_s16_source',
         'no_noise': True,
         'depot': DEPOT,
     }
@@ -54,7 +54,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_planet': 'pa3_f90_s16_c10_v1_planet',
+        'tag_planet': 'mr3_pa3_s16_planet',
         'depot': DEPOT,
     }
     loop.add_routine(CutPlanets(**planets_params))
@@ -67,7 +67,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_sync': 'pa3_f90_s16_c10_v1',
+        'tag_sync': 'mr3_pa3_s16',
         'remove_sync': False,
         'force_sync': False,
         'depot': DEPOT,
@@ -82,7 +82,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_partial': 'pa3_f90_s16_c10_v1_partial',
+        'tag_partial': 'mr3_pa3_s16_partial',
         'include_mce': True,
         'force_partial': False,
         'glitchp': { 'nSig': 10., 'tGlitch' : 0.007, 'minSeparation': 30, \
@@ -128,9 +128,9 @@ def add_cut_routines(loop):
             'dets': 'dets',        
         },
         'source': 'individual',
-        'live': BASE_DIR + 'live_pa3_f90_s16_c10_v4.dict',
+        'live': BASE_DIR + 'live_pa3_s16_c10_v4.dict',
         'dark': BASE_DIR + 'dark.dict',
-        'exclude': BASE_DIR + 'exclude_pa3_f90_s16_c10_v4.dict'
+        'exclude': BASE_DIR + 'exclude_pa3_s16_c10_v4.dict'
     }
     loop.add_routine(GetDetectors(**gd_params))
 
@@ -145,8 +145,8 @@ def add_cut_routines(loop):
             'tod': 'tod',
             'cal': 'calData' 
         },
-        'flatfield': "/mnt/act3/users/mhasse/shared/actpol_shared_depot/FlatFields/2015/" + \
-                     "ff_actpol3_2015_c9_w1_v2b_mix90-150_it9_actpol3_2015_c9_w2_photon_mix90-150_it7.dict",
+        'flatfield': "/mnt/act3/users/mhasse/shared/actpol_shared_depot/FlatFields/2016/" + \
+                     "ff_pa3_s16_c10_v5.dict",
         'config': [{
             "type": "depot_cal",
             "depot": DEPOT,
@@ -321,7 +321,7 @@ prepare_params = {
         'report': 'report',
         'dets': 'dets',        
     },
-    'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
+    'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',    
     'output_file': 'outputs/dataset.h5',
     'group': 'train',
     'downsample': 10,
@@ -342,7 +342,7 @@ prepare_params = {
         'dets': 'dets',        
         'report': 'report',
     },
-    'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
+    'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',
     'output_file': 'outputs/dataset.h5',
     'group': 'validate',
     'downsample': 10,
