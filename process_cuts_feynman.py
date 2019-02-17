@@ -12,8 +12,8 @@ train_loop = TODLoop()
 validate_loop = TODLoop()
 
 # specify the list of tods to go through
-train_loop.add_tod_list("inputs/2016_ar3_train.txt")
-validate_loop.add_tod_list("inputs/2016_ar3_validate.txt")
+train_loop.add_tod_list("./inputs/mr3_pa3_s16_train.txt")
+validate_loop.add_tod_list("./inputs/mr3_pa3_s16_validate.txt")
 
 ################################
 # add routines to the pipeline #
@@ -40,7 +40,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod'
         },
-        'tag_source': 'mr3_pa3_s16_source',
+        'tag_source': 'pa3_f90_s16_c10_v1_source',
         'no_noise': True,
         'depot': DEPOT,
     }
@@ -54,7 +54,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_planet': 'mr3_pa3_s16_planet',
+        'tag_planet': 'pa3_f90_s16_c10_v1_planet',
         'depot': DEPOT,
     }
     loop.add_routine(CutPlanets(**planets_params))
@@ -67,7 +67,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_sync': 'mr3_pa3_s16',
+        'tag_sync': 'pa3_f90_s16_c10_v1',
         'remove_sync': False,
         'force_sync': False,
         'depot': DEPOT,
@@ -82,7 +82,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_partial': 'mr3_pa3_s16_partial',
+        'tag_partial': 'pa3_f90_s16_c10_v1_partial',
         'include_mce': True,
         'force_partial': False,
         'glitchp': { 'nSig': 10., 'tGlitch' : 0.007, 'minSeparation': 30, \
