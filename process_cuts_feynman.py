@@ -295,7 +295,6 @@ def add_cut_routines(loop):
     # summarize the pickle parameters
     summary_params = {
         'inputs': {
-            'lf_dark': 'lf_dark',
             'lf_live': 'lf_live',
             'drift': 'drift',
             'mf_live': 'mf_live',
