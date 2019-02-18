@@ -169,6 +169,7 @@ class PrepareDataLabelNew(Routine):
         tod_name = self.get_name()
         pickle_id = self._pickle_data['name'].index(tod_name)
 
+
         # get list of detectors of interests
         live = store.get(self.inputs.get('dets'))['live_final']
         live_dets = list(np.where(live == 1))[0]
