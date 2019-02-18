@@ -5,7 +5,7 @@ from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
-from report import Summarize, PrepareDataLabel
+from report import Summarize, PrepareDataLabelNew
 
 # initialize the pipelines
 train_loop = TODLoop()
@@ -318,6 +318,7 @@ train_loop = add_cut_routines(train_loop)
 prepare_params = {
     'inputs': {
         'tod': 'tod',
+        'fft': 'fft_data',
         'report': 'report',
         'dets': 'dets',        
     },
@@ -327,7 +328,7 @@ prepare_params = {
     'downsample': 10,
     'remove_mean': True,    
 }
-train_loop.add_routine(PrepareDataLabel(**prepare_params))
+train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for training data
 train_loop.run(0, 60)
@@ -341,6 +342,7 @@ prepare_params = {
     'inputs': {
         'tod': 'tod',
         'dets': 'dets',        
+        'fft': 'fft_data',
         'report': 'report',
     },
     'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',
@@ -349,7 +351,7 @@ prepare_params = {
     'downsample': 10,
     'remove_mean': True,
 }
-validate_loop.add_routine(PrepareDataLabel(**prepare_params))
+validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run the pipeline for validation data
 validate_loop.run(0, 20)
