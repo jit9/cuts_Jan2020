@@ -123,7 +123,6 @@ class PrepareDataLabelNew(Routine):
         self._pickle_file = params.get('pickle_file', None)
         self._output_file = params.get('output_file', None)
         self._group_name = params.get('group', None)
-        self._downsample = params.get('downsample', 1)
         self._remove_mean = params.get('remove_mean', False)
         self._truncate = params.get('truncate', 1000)
 
@@ -176,7 +175,7 @@ class PrepareDataLabelNew(Routine):
         # store each det timeseries in hdf5
         for tes_det in dets_mask:
             tdata = tod.data[tes_det, :self._truncate]
-            fdata = np.abs(fft[tes_det, :self._truncate] )
+            fdata = np.abs(fft[tes_det, :self._truncate])
 
             data = np.vstack([tdata, fdata])
 
