@@ -282,7 +282,6 @@ class CalibrateTOD(Routine):
             "flatfield_object": flatfield_object
         }
 
-        
         ########################################################
         # calibrate TOD to pW using responsivity and flatfield #
         ########################################################
@@ -293,7 +292,8 @@ class CalibrateTOD(Routine):
         orig_dark = store.get(self.inputs.get('dets'))['dark_candidates']
         s = ~orig_dark
         
-        if not self._calibrateTOD:
+        if self._calibrateTOD:
+            self.logger.info("Calibrating TOD...")
             moby2.libactpol.apply_calibration(tod.data,
                                               s.nonzero()[0].astype('int32'),
                                               cal[s].astype('float32'))
@@ -307,6 +307,6 @@ class CalibrateTOD(Routine):
 
         # save to data store
         store.set(self.outputs.get('cal'), calData)
-        store.set(self.outputs.get('tod'), tod)        
+        store.set(self.outputs.get('tod'), tod)
 
         
