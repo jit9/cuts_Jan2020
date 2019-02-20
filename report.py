@@ -169,11 +169,12 @@ class PrepareDataLabelNew(Routine):
         tod_name = self.get_name()
         pickle_id = self._pickle_data['name'].index(tod_name)
 
-        # get tes mask
-        dets_mask = list(np.where(tod.info.array_data['det_type'] == 'tes'))[0]
+        # get list of detectors of interests
+        live = store.get(self.inputs.get('dets'))['live_final']
+        live_dets = list(np.where(live == 1))[0]
 
         # store each det timeseries in hdf5
-        for tes_det in dets_mask:
+        for tes_det in live_dets:
             tdata = tod.data[tes_det, :self._truncate]
             fdata = np.abs(fft[tes_det, :self._truncate])
 
