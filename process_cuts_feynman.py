@@ -319,6 +319,7 @@ prepare_params = {
     'inputs': {
         'tod': 'tod',
         'report': 'report',
+        'dets': 'dets',        
     },
     'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
     'output_file': 'outputs/dataset.h5',
@@ -338,6 +339,7 @@ validate_loop = add_cut_routines(validate_loop)
 prepare_params = {
     'inputs': {
         'tod': 'tod',
+        'dets': 'dets',        
         'report': 'report',
     },
     'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',

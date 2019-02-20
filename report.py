@@ -62,7 +62,7 @@ class PrepareDataLabel(Routine):
     def execute(self, store):
         # retrieve tod
         tod = store.get(self.inputs.get('tod'))
-
+        
         # retrieve the calculated statustics
         report = store.get(self.inputs.get('report'))
         keys = report.keys()
@@ -71,11 +71,12 @@ class PrepareDataLabel(Routine):
         tod_name = self.get_name()
         pickle_id = self._pickle_data['name'].index(tod_name)
 
-        # get tes mask
-        tes_mask = list(np.where(tod.info.array_data['det_type'] == 'tes'))[0]
+        # get detectors
+        live = store.get(self.inputs.get('dets'))['live_final']
+        live_dets = list(np.where(live == 1))[0]
 
         # store each det timeseries in hdf5
-        for tes_det in tes_mask:
+        for tes_det in live_dets:
             if self._downsample:
                 data = tod.data[tes_det, ::self._downsample]
             else:
