@@ -16,8 +16,8 @@ train_loop = TODLoop()
 validate_loop = TODLoop()
 
 # specify the list of tods to go through
-train_loop.add_tod_list("data/2016_ar3_train.txt")
-validate_loop.add_tod_list("data/2016_ar3_validate.txt")
+train_loop.add_tod_list("inputs/2016_ar3_train.txt")
+validate_loop.add_tod_list("inputs/2016_ar3_validate.txt")
 
 ################################
 # add routines to the pipeline #
@@ -335,6 +335,7 @@ prepare_params = {
     'inputs': {
         'tod': 'tod',
         'report': 'report',
+        'dets': 'dets',
     },
     'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
     'output_file': 'dataset.h5',
@@ -355,6 +356,7 @@ prepare_params = {
     'inputs': {
         'tod': 'tod',
         'report': 'report',
+        'dets': 'dets',
     },
     'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
     'output_file': 'dataset.h5',
