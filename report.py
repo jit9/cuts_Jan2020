@@ -125,6 +125,7 @@ class PrepareDataLabelNew(Routine):
         self._group_name = params.get('group', None)
         self._remove_mean = params.get('remove_mean', False)
         self._truncate = params.get('truncate', 1000)
+        self._downsample = params.get('downsample', 5)
 
     def initialize(self):
         # load pickle file
@@ -178,7 +179,7 @@ class PrepareDataLabelNew(Routine):
 
         # store each det timeseries in hdf5
         for tes_det in live_dets:
-            tdata = tod.data[tes_det, :self._truncate]
+            tdata = tod.data[tes_det, ::self._downsample][:self._truncate]
             fdata = np.abs(fft[tes_det, :self._truncate])
             fdata -= fdata_cm
 
