@@ -175,11 +175,11 @@ class PrepareDataLabelNew(Routine):
         live_dets = list(np.where(live == 1))[0]
 
         # treat the median as the common modes
-        fdata_cm = np.median(live_dets, axis=0)
+        fdata_cm = np.median(np.abs(fft[live_dets, :self._truncate]), axis=0)
 
         # store each det timeseries in hdf5
         for tes_det in live_dets:
-            tdata = tod.data[tes_det, ::self._downsample][:self._truncate]
+            tdata = tod.data[tes_det, ::self._downsample][400:400+self._truncate]
             fdata = np.abs(fft[tes_det, :self._truncate])
             fdata -= fdata_cm
 
