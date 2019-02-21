@@ -5,15 +5,15 @@ from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
-from report import Summarize, PrepareDataLabel
+from report import Summarize, PrepareDataLabelNew
 
 # initialize the pipelines
 train_loop = TODLoop()
 validate_loop = TODLoop()
 
 # specify the list of tods to go through
-train_loop.add_tod_list("inputs/2016_ar3_train.txt")
-validate_loop.add_tod_list("inputs/2016_ar3_validate.txt")
+train_loop.add_tod_list("./inputs/mr3_pa3_s16_train.txt")
+validate_loop.add_tod_list("./inputs/mr3_pa3_s16_validate.txt")
 
 ################################
 # add routines to the pipeline #
@@ -128,9 +128,9 @@ def add_cut_routines(loop):
             'dets': 'dets',        
         },
         'source': 'individual',
-        'live': BASE_DIR + 'live_pa3_f90_s16_c10_v4.dict',
+        'live': BASE_DIR + 'live_pa3_s16_c10_v4.dict',
         'dark': BASE_DIR + 'dark.dict',
-        'exclude': BASE_DIR + 'exclude_pa3_f90_s16_c10_v4.dict'
+        'exclude': BASE_DIR + 'exclude_pa3_s16_c10_v4.dict'
     }
     loop.add_routine(GetDetectors(**gd_params))
 
@@ -145,8 +145,8 @@ def add_cut_routines(loop):
             'tod': 'tod',
             'cal': 'calData' 
         },
-        'flatfield': "/mnt/act3/users/mhasse/shared/actpol_shared_depot/FlatFields/2015/" + \
-                     "ff_actpol3_2015_c9_w1_v2b_mix90-150_it9_actpol3_2015_c9_w2_photon_mix90-150_it7.dict",
+        'flatfield': "/mnt/act3/users/mhasse/shared/actpol_shared_depot/FlatFields/2016/" + \
+                     "ff_pa3_s16_c10_v5.dict",
         'config': [{
             "type": "depot_cal",
             "depot": DEPOT,
@@ -318,15 +318,16 @@ train_loop = add_cut_routines(train_loop)
 prepare_params = {
     'inputs': {
         'tod': 'tod',
+        'fft': 'fft_data',
         'report': 'report',
         'dets': 'dets',        
     },
-    'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
+    'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',    
     'output_file': 'outputs/dataset.h5',
     'group': 'train',
-    'downsample': 10,
+    'remove_mean': True,    
 }
-train_loop.add_routine(PrepareDataLabel(**prepare_params))
+train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for training data
 train_loop.run(0, 60)
@@ -340,14 +341,15 @@ prepare_params = {
     'inputs': {
         'tod': 'tod',
         'dets': 'dets',        
+        'fft': 'fft_data',
         'report': 'report',
     },
-    'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
+    'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',
     'output_file': 'outputs/dataset.h5',
     'group': 'validate',
-    'downsample': 10,
+    'remove_mean': True,
 }
-validate_loop.add_routine(PrepareDataLabel(**prepare_params))
+validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run the pipeline for validation data
 validate_loop.run(0, 20)
