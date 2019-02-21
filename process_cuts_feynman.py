@@ -5,7 +5,7 @@ from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
-from report import Summarize, PrepareDataLabel
+from report import Summarize, PrepareDataLabelNew
 
 # initialize the pipelines
 train_loop = TODLoop()
@@ -319,14 +319,14 @@ prepare_params = {
     'inputs': {
         'tod': 'tod',
         'report': 'report',
-        'dets': 'dets',        
+        'dets': 'dets',
+        'fft': 'fft_data',
     },
     'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
     'output_file': 'outputs/dataset.h5',
     'group': 'train',
-    'downsample': 10,
 }
-train_loop.add_routine(PrepareDataLabel(**prepare_params))
+train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for training data
 train_loop.run(0, 60)
@@ -339,15 +339,15 @@ validate_loop = add_cut_routines(validate_loop)
 prepare_params = {
     'inputs': {
         'tod': 'tod',
-        'dets': 'dets',        
+        'dets': 'dets',
         'report': 'report',
+        'fft': 'fft_data',
     },
     'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
     'output_file': 'outputs/dataset.h5',
     'group': 'validate',
-    'downsample': 10,
 }
-validate_loop.add_routine(PrepareDataLabel(**prepare_params))
+validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run the pipeline for validation data
 validate_loop.run(0, 20)
