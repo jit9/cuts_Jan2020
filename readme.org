@@ -128,9 +128,76 @@ jump_params = {
 }
 loop.add_routine(FindJumps(**jump_params))
 #+END_SRC
-Here ~loop~ refers to an underlying loop that will iterate over a list of
-TODs.
+Here ~loop~ refers to an underlying loop that will iterate over a list
+of TODs. Routine specific parameters are supplied by a
+dictionary. ~inputs~ here contains the data that the routine requires
+and where to find it in the shared data store. Similarly, ~outputs~ here
+specifies the data that the routine exports and where other routines can
+access it. Consider another example,
 
+#+BEGIN_SRC python
+  routine1_param = {
+      'outputs': {
+          'tod': 'tod-key'
+      }
+  }
+  loop.add_routine(Routine1(**routine1_param))
+#+END_SRC
+This adds a routine called ~Routine1~ in the pipeline. It demands no
+inputs and exports a ~tod~ data. This data will be stored in the
+shared data store that all routines can access, and it is associated
+with a key ~'tod-key'~. If another routine requires tod data as an 
+input,
+#+BEGIN_SRC python
+  routine2_param = {
+      'inputs': {
+          'tod': 'tod-key'
+      },
+      'outputs': {
+          'processed_tod': 'another-key'
+      }
+  }
+  loop.add_routine(Routine2(**routine2_param))
+#+END_SRC
+One can specify the associated key in the inputs and the data will be
+accessible. Similarly the processed data can be exported again and be
+accessible by other routines. The purpose of this is to have better
+encapsulation of various independent routine components.
+
+A complete pipeline definition for the previous example would look
+like
+#+BEGIN_SRC python
+from todloop import TODLoop
+
+# initialize loop
+loop = TODLoop()
+
+# specify tod list to process
+loop.add_tod_list("your_list_of_tods.txt")
+
+# add routine 1
+routine1_param = {
+    'outputs': {
+        'tod': 'tod-key'
+    }
+}
+loop.add_routine(Routine1(**routine1_param))
+
+# add routine 2
+routine2_param = {
+    'inputs': {
+        'tod': 'tod-key'
+    },
+    'outputs': {
+        'processed_tod': 'another-key'
+    }
+}
+loop.add_routine(Routine2(**routine2_param))
+
+# execute pipeline for the first 100 TODs in the list
+loop.run(0,100)
+
+#+END_SRC
 ** The Cut Pipeline 
 Here is a rough sketch of some of the routines in the existing pipeline
 and their whereabouts in this repository. 
