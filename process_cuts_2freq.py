@@ -371,7 +371,7 @@ prepare_params.update({
 validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run the pipeline for validation data
-# validate_loop.run(0, 20)
+validate_loop.run(0, 20)
 
 # work on validation data
 test_loop = add_cut_routines(test_loop)
