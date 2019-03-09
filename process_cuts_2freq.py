@@ -325,12 +325,9 @@ def add_cut_routines(loop):
     # summarize the pickle parameters
     summary_params = {
         'inputs': {
-            'lf_live': 'lf_live',
-            'drift': 'drift',
-            'mf_live': 'mf_live',
-            'hf': 'hf',
-            'jumps': 'jumps',
-            'features': 'jesse_features',
+            # calculated features to include in the report
+            'features': ['lf_live', 'drift', 'mf_live', 'hf', 'jumps',
+                         'jesse_features'],
         },
         'outputs': {
             'report': 'report',
