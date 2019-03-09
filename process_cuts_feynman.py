@@ -7,13 +7,29 @@ from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
 from report import Summarize, PrepareDataLabelNew
 
+
+##############
+# parameters #
+##############
+
+DEPOT = "/mnt/act3/users/lmaurin/depot"
+
+pickle_file = "/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle"
+output_file = "outputs/dataset.h5"
+
+#############
+# pipeline  #
+#############
+
 # initialize the pipelines
 train_loop = TODLoop()
 validate_loop = TODLoop()
+test_loop = TODLoop()
 
 # specify the list of tods to go through
 train_loop.add_tod_list("inputs/2016_ar3_train.txt")
 validate_loop.add_tod_list("inputs/2016_ar3_validate.txt")
+test_loop.add_tod_list("inputs/2016_ar3_test.txt")
 
 ################################
 # add routines to the pipeline #
@@ -25,7 +41,7 @@ def add_cut_routines(loop):
     ourselves to register these routines for each data set (train,
     validate, test).
     """
-    DEPOT = '/mnt/act3/users/lmaurin/depot'
+
     # add a routine to load tod
     loader_params = {
         'output_key': 'tod',
@@ -309,6 +325,9 @@ def add_cut_routines(loop):
 
     return loop
 
+#########
+# train #
+#########
 
 # work on training data
 train_loop = add_cut_routines(train_loop)
@@ -322,34 +341,45 @@ prepare_params = {
         'dets': 'dets',
         'fft': 'fft_data',
     },
-    'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
-    'output_file': 'outputs/dataset.h5',
+    'pickle_file': pickle_file,
+    'output_file': output_file,
     'group': 'train',
 }
 train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for training data
-train_loop.run(0, 60)
+# train_loop.run(0, 60)
+
+############
+# validate #
+############
 
 # work on validation data
 validate_loop = add_cut_routines(validate_loop)
 
 # save report and TOD data into an h5 file for
 # future machine learning pipeline
-prepare_params = {
-    'inputs': {
-        'tod': 'tod',
-        'dets': 'dets',
-        'report': 'report',
-        'fft': 'fft_data',
-    },
-    'pickle_file': '/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle',
-    'output_file': 'outputs/dataset.h5',
-    'group': 'validate',
-}
+prepare_params.update({
+    'group': 'validate'
+})
 validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
-# run the pipeline for validation data
-validate_loop.run(0, 20)
+# run pipeline for validation data
+# validate_loop.run(0, 20)
 
-# done
+########
+# test #
+########
+
+# work on test data
+test_loop = add_cut_routines(test_loop)
+
+prepare_params.update({
+    'group': 'test'
+})
+test_loop.add_routine(PrepareDataLabelNew(**prepare_params))
+
+# run the pipeline for testdata
+test_loop.run(0, 20)
+
+# done!
