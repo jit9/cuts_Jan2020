@@ -1,12 +1,12 @@
 from todloop import TODLoop
 from todloop.tod import TODLoader
 
-from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
-from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
-from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
+from routines.cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
+from routines.tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
+from routines.analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
-from features import JesseFeatures
-from report import Summarize, PrepareDataLabelNew
+from routines.features import JesseFeatures
+from routines.report import Summarize, PrepareDataLabelNew
 
 
 ##############
