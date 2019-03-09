@@ -1,3 +1,8 @@
+"""This script defines a pipeline to generate a readily available hdf5 file
+for machine learning pipelines. It calculates some statistical meatures of
+each detector data based on the same method in moby2 cut pipeline
+"""
+
 from todloop import TODLoop
 from todloop.tod import TODLoader
 
@@ -5,27 +10,41 @@ from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
+from features import JesseFeatures
 from report import Summarize, PrepareDataLabelNew
+
+
+##############
+# parameters #
+##############
+
+DEPOT = '/mnt/act3/users/lmaurin/depot'
+
+pickle_file = "/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle"
+output_file = "outputs/dataset_2f.h5"
+
+
+#############
+# pipeline  #
+#############
 
 # initialize the pipelines
 train_loop = TODLoop()
 validate_loop = TODLoop()
+test_loop = TODLoop()
 
 # specify the list of tods to go through
 train_loop.add_tod_list("./inputs/mr3_pa3_s16_train.txt")
 validate_loop.add_tod_list("./inputs/mr3_pa3_s16_validate.txt")
+test_loop.add_tod_list("./inputs/mr3_pa3_s16_test.txt")
 
-################################
-# add routines to the pipeline #
-################################
-
+# add routines to the pipeline
 def add_cut_routines(loop):
     """This function registers a series of common routines for cut
     analysis. This is so that we don't have to keep repeating
     ourselves to register these routines for each data set (train,
     validate, test).
     """
-    DEPOT = '/mnt/act3/users/lmaurin/depot'
     # add a routine to load tod
     loader_params = {
         'output_key': 'tod',
@@ -292,6 +311,17 @@ def add_cut_routines(loop):
     }
     loop.add_routine(AnalyzeHF(**hf_params))
 
+    # add the routine to compute jesse's features
+    params = {
+        'inputs': {
+            'tod': 'tod',
+        },
+        'outputs': {
+            'results': 'jesse_features',
+        }
+    }
+    loop.add_routine(JesseFeatures(**params))
+
     # summarize the pickle parameters
     summary_params = {
         'inputs': {
@@ -300,6 +330,7 @@ def add_cut_routines(loop):
             'mf_live': 'mf_live',
             'hf': 'hf',
             'jumps': 'jumps',
+            'features': 'jesse_features',
         },
         'outputs': {
             'report': 'report',
@@ -322,36 +353,40 @@ prepare_params = {
         'report': 'report',
         'dets': 'dets',        
     },
-    'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',    
-    'output_file': 'outputs/dataset.h5',
+    'pickle_file': pickle_file,
+    'output_file': output_file,
     'group': 'train',
     'remove_mean': True,    
 }
 train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for training data
-train_loop.run(0, 60)
+# train_loop.run(0, 60)
 
 # work on validation data
 validate_loop = add_cut_routines(validate_loop)
 
 # save report and TOD data into an h5 file for
 # future machine learning pipeline
-prepare_params = {
-    'inputs': {
-        'tod': 'tod',
-        'dets': 'dets',        
-        'fft': 'fft_data',
-        'report': 'report',
-    },
-    'pickle_file': '/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle',
-    'output_file': 'outputs/dataset.h5',
+prepare_params.update({
     'group': 'validate',
-    'remove_mean': True,
-}
+})
 validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run the pipeline for validation data
-validate_loop.run(0, 20)
+# validate_loop.run(0, 20)
+
+# work on validation data
+test_loop = add_cut_routines(test_loop)
+
+# save report and TOD data into an h5 file for
+# future machine learning pipeline
+prepare_params.update({
+    'group': 'test',
+})
+test_loop.add_routine(PrepareDataLabelNew(**prepare_params))
+
+# run the pipeline for validation data
+test_loop.run(0, 20)
 
 # done
