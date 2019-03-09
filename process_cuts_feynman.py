@@ -5,6 +5,7 @@ from cuts import CutSources, CutPlanets, CutPartial, FindJumps, RemoveSyncPickup
 from tod import TransformTOD, FouriorTransform, GetDetectors, CalibrateTOD
 from analysis import AnalyzeScan, AnalyzeDarkLF, AnalyzeLiveLF, GetDriftErrors,\
                      AnalyzeLiveMF, AnalyzeHF
+from features import JesseFeatures
 from report import Summarize, PrepareDataLabelNew
 
 
@@ -308,6 +309,17 @@ def add_cut_routines(loop):
     }
     loop.add_routine(AnalyzeHF(**hf_params))
 
+    # add the routine to compute jesse's features
+    params = {
+        'inputs': {
+            'tod': 'tod',
+        },
+        'outputs': {
+            'results': 'jesse_features',
+        }
+    }
+    loop.add_routine(JesseFeatures(**params))
+
     # summarize the pickle parameters
     summary_params = {
         'inputs': {
@@ -316,6 +328,7 @@ def add_cut_routines(loop):
             'mf_live': 'mf_live',
             'hf': 'hf',
             'jumps': 'jumps',
+            'features': 'jesse_features',
         },
         'outputs': {
             'report': 'report',
