@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """This script takes a pickle file and generate three lists of
 TODs corresponding to train, validate and test for developing
 machine learning pipeline.

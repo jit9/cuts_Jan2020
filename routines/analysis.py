@@ -52,9 +52,9 @@ class AnalyzeScan(Routine):
 
         # summary of scan parameters
         scan_params = {
-            'T': scan["T"] * ds,
-            'pivot': scan["pivot"] * ds,
-            'N': scan["N"],
+            # 'T': scan["T"] * ds,
+            # 'pivot': scan["pivot"] * ds,
+            # 'N': scan["N"],
             'scan_freq': scan_freq
         }
         
@@ -125,48 +125,49 @@ class AnalyzeScan(Routine):
         # scan frequency
         fscan = np.where(abs(faz) == abs(faz).max())[0][0] / dt / len(az)
 
-        # Find turnarounds
-        az_min = np.median(az[stop * (az < lo)])
-        az_max = np.median(az[stop * (az > hi)])
-        # i don't understand this part
-        td = abs(lo - az_min) + abs(az_max - hi)
+        # temporily remove this part
+        # # Find turnarounds
+        # az_min = np.median(az[stop * (az < lo)])
+        # az_max = np.median(az[stop * (az > hi)])
+        # # i don't understand this part
+        # td = abs(lo - az_min) + abs(az_max - hi)
 
-        # Find scan period parameters
-        T_scan = int(1. / fscan / dt)  # number of samples in scan period
+        # # Find scan period parameters
+        # T_scan = int(1. / fscan / dt)  # number of samples in scan period
 
-        # this is kind of arbitrary
-        T_ex = int(1.2 * T_scan)
+        # # this is kind of arbitrary
+        # T_ex = int(1.2 * T_scan)
 
-        # find non-stopping part of scan
-        onescan = az[~noscan][:T_ex]
-        az_min0 = np.min(onescan[stop[~noscan][:T_ex] * (onescan < lo)
-                                 * (onescan > lo - td)])
-        az_max0 = np.max(onescan[stop[~noscan][:T_ex] * (onescan > hi)
-                                 * (onescan < hi + td)])
-        imin0 = np.where(az == az_min0)[0][0]
-        imax0 = np.where(az == az_max0)[0][0]
-        pivot = np.min([imin0, imax0])  # Index of first scan minima or maxima
-        N_scan = (len(az) - pivot) / T_scan  # Number of complete scan periods
+        # # find non-stopping part of scan
+        # onescan = az[~noscan][:T_ex]
+        # az_min0 = np.min(onescan[stop[~noscan][:T_ex] * (onescan < lo)
+        #                          * (onescan > lo - td)])
+        # az_max0 = np.max(onescan[stop[~noscan][:T_ex] * (onescan > hi)
+        #                          * (onescan < hi + td)])
+        # imin0 = np.where(az == az_min0)[0][0]
+        # imax0 = np.where(az == az_max0)[0][0]
+        # pivot = np.min([imin0, imax0])  # Index of first scan minima or maxima
+        # N_scan = (len(az) - pivot) / T_scan  # Number of complete scan periods
 
-        # Find cuts
-        if hi - lo < 1. * np.pi / 180:
-            flag = np.ones_like(az, dtype=bool)
-        else:
-            flag = (pick + stop) * (az > lo) * (az < hi) + (az < lo - td) + (
-                az > hi + td)
+        # # Find cuts
+        # if hi - lo < 1. * np.pi / 180:
+        #     flag = np.ones_like(az, dtype=bool)
+        # else:
+        #     flag = (pick + stop) * (az > lo) * (az < hi) + (az < lo - td) + (
+        #         az > hi + td)
 
-        c_vect = moby2.tod.cuts.CutsVector.from_mask(flag).get_buffered(100)
+        # c_vect = moby2.tod.cuts.CutsVector.from_mask(flag).get_buffered(100)
 
         # return scan parameters
         scan = {
-            "az_max": az_max,
-            "az_min": az_min,
-            "az_speed": speed,
+            # "az_max": az_max,
+            # "az_min": az_min,
+            # "az_speed": speed,
             "scan_freq": fscan,
-            "az_cuts": c_vect,
-            "T": T_scan,
-            "pivot": pivot,
-            "N": N_scan
+            # "az_cuts": c_vect,
+            # "T": T_scan,
+            # "pivot": pivot,
+            # "N": N_scan
         }
         return scan
 
