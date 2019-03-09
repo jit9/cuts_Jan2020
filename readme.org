@@ -12,25 +12,17 @@ pip install git+https://github.com/guanyilun/todloop
 #+END_SRC
 Most of the scripts in this repo contain only definition of different
 ~Routine~ (more on this later). These routines can be added to a
-pipeline that executes on a list of TODs. A simple pipeline is given
-in ~test.py~ which consists of only two routines. The first routine
-loads the TOD, and the second routine computes a few features of the
-loaded TOD. To run it
-#+BEGIN_SRC sh
-python test.py
-#+END_SRC
-The (adapted version of) cut pipeline is defined in ~process_cuts.py~
-(for running on hermes) and ~process_cuts_feynman.py~ (for running on
-feynman). For example, on feynman,
+pipeline that executes on a list of TODs. 
+
+The (adapted version of) cut pipeline is defined in
+~process_cuts_feynman.py~ (for running on feynman). For example, on
+feynman,
 #+BEGIN_SRC sh
 python process_cuts_feynman.py
 #+END_SRC
-On hermes,
-#+BEGIN_SRC sh
-python process_cuts_hermes.py
-#+END_SRC
-This will run the cut pipeline on a list of 80 TODs with 60 TODs used 
-for training and another 20 TODs used for validation. 
+This will run the cut pipeline on a list of 80 TODs with 60 TODs used
+for training, 20 TODs used for validation and 20 TODs used for
+testing.
 
 ** Architecture
 The basic unit in the analysis is called a ~Routine~. It represents a
@@ -198,66 +190,65 @@ loop.add_routine(Routine2(**routine2_param))
 loop.run(0,100)
 
 #+END_SRC
-** The Cut Pipeline 
+** The Cut Pipeline
 Here is a rough sketch of some of the routines in the existing pipeline
 and their whereabouts in this repository. 
 
-|---------------------+-----------------+-------------+-------------------|
-| steps applied       | moby2           | here        | name              |
-|---------------------+-----------------+-------------+-------------------|
-| cut mce             | process_cuts.py | cuts.py     | CutPartial        |
-| cut planets         | process_cuts.py | cuts.py     | CutPlanets        |
-| cut sources         | process_cuts.py | cuts.py     | CutSources        |
-| cut glitches        | process_cuts.py | cuts.py     | CutPartial        |
-| remove hwp          | process_cuts.py | cuts.py     | SubstractHWP      |
-| remove mean         | process_cuts.py | tod.py      | TransformTOD      |
-| detrend             | process_cuts.py | tod.py      | TransformTOD      |
-| remove filter gain  | process_cuts.py | tod.py      | TransformTOD      |
-| downsample          | process_cuts.py | tod.py      | TransformTOD      |
-| find zero detectors | pathologies.py  | tod.py      | GetDetectors      |
-| find jumps          | pathologies.py  | cuts.py     | FindJumps         |
-| calibrate to pW     | pathologies.py  | tod.py      | CalibrateTOD      |
-| analyze scans       | pathologies.py  | analysis.py | AnalyzeScan       |
-| fourior transform   | pathologies.py  | tod.py      | FouriorTransform  |
-| multi-freq analysis | pathologies.py  | analysis.py | AnalyzeDarkLF ... |
-|---------------------+-----------------+-------------+-------------------|
+|---------------------+-----------------+----------------------+-------------------|
+| steps applied       | moby2           | here                 | name              |
+|---------------------+-----------------+----------------------+-------------------|
+| cut mce             | process_cuts.py | routines/cuts.py     | CutPartial        |
+| cut planets         | process_cuts.py | routines/cuts.py     | CutPlanets        |
+| cut sources         | process_cuts.py | routines/cuts.py     | CutSources        |
+| cut glitches        | process_cuts.py | routines/cuts.py     | CutPartial        |
+| remove hwp          | process_cuts.py | routines/cuts.py     | SubstractHWP      |
+| remove mean         | process_cuts.py | routines/tod.py      | TransformTOD      |
+| detrend             | process_cuts.py | routines/tod.py      | TransformTOD      |
+| remove filter gain  | process_cuts.py | routines/tod.py      | TransformTOD      |
+| downsample          | process_cuts.py | routines/tod.py      | TransformTOD      |
+| find zero detectors | pathologies.py  | routines/tod.py      | GetDetectors      |
+| find jumps          | pathologies.py  | routines/cuts.py     | FindJumps         |
+| calibrate to pW     | pathologies.py  | routines/tod.py      | CalibrateTOD      |
+| analyze scans       | pathologies.py  | routines/analysis.py | AnalyzeScan       |
+| fourior transform   | pathologies.py  | routines/tod.py      | FouriorTransform  |
+| multi-freq analysis | pathologies.py  | routines/analysis.py | AnalyzeDarkLF ... |
+|---------------------+-----------------+----------------------+-------------------|
 
 ** Files
-- cuts.py: cuts related routines
-- tod.py: tod related routines
-- analysis.py: mainly the multi-freq analysis, also some temperature
-  analysis, scan analysis, etc.
-- utils.py: some utility functions such ~nextregular~ for fft
+- ~routines/cuts.py~: cuts related routines
+- ~routines/tod.py~: tod related routines
+- ~routines/analysis.py~: mainly the multi-freq analysis, also some
+  temperature analysis, scan analysis, etc.
+- ~routines/utils.py~: some utility functions such ~nextregular~ for fft
   preselection functions
-- report.py: routines related to reporting the results of analysis
-- features.py: design new features that may be useful
-- process_cuts_feynman: the driver program for feynman, it defines the
-  pipeline and specifies the parameters inputs for each routine
-- process_cuts_hermes: same script for hermes
-- process_cuts_features: experimental driver scripts to test
-- test.py: test driver script 
+- ~routines/report.py~: routines related to reporting the results of analysis
+- ~routines/features.py~: design new features that may be useful
+- ~process_cuts_feynman~: the driver program for running the pipeline
+  on feynman, it defines the pipeline and specifies the parameters
+  inputs for each routine. 
 
 ** Status Quo
 Currently the pipeline consists of the following routines (example output):
 #+BEGIN_SRC 
-2019-02-06 03:05:07,404 [INFO] TODLoop: Added routine: TODLoader
-2019-02-06 03:05:07,404 [INFO] TODLoop: Added routine: CutSources
-2019-02-06 03:05:07,404 [INFO] TODLoop: Added routine: CutPlanets
-2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: RemoveSyncPickup
-2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: CutPartial
-2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: TransformTOD
-2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: AnalyzeScan
-2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: GetDetectors
-2019-02-06 03:05:07,405 [INFO] TODLoop: Added routine: CalibrateTOD
-2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: FindJumps
-2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: FouriorTransform
-2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeDarkLF
-2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeLiveLF
-2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: GetDriftErrors
-2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeLiveMF
-2019-02-06 03:05:07,406 [INFO] TODLoop: Added routine: AnalyzeHF
-2019-02-06 03:05:07,407 [INFO] TODLoop: Added routine: Summarize
-2019-02-06 03:05:07,407 [INFO] TODLoop: Added routine: PrepareDataLabel
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: TODLoader
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: CutSources
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: CutPlanets
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: RemoveSyncPickup
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: CutPartial
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: TransformTOD
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: AnalyzeScan
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: GetDetectors
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: CalibrateTOD
+2019-03-09 10:02:05,156 [INFO] TODLoop: Added routine: FindJumps
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: FouriorTransform
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: AnalyzeDarkLF
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: AnalyzeLiveLF
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: GetDriftErrors
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: AnalyzeLiveMF
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: AnalyzeHF
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: JesseFeatures
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: Summarize
+2019-03-09 10:02:05,157 [INFO] TODLoop: Added routine: PrepareDataLabelNew
 #+END_SRC
 The parameters that can be computed include
 #+BEGIN_SRC 
@@ -278,7 +269,13 @@ The parameters that can be computed include
  'jumpLive',
  'rmsLive',
  'darkSel',
- 'skewpLive']
+ 'skewpLive',
+ 'feat1',  # 4 additional features implemented by Jesse
+ 'feat2',  # for more details find JesseFeatures routine
+ 'feat3',  # in routines/features.py
+ 'feat5'] 
+
+
 #+END_SRC
 ** Descriptions of Routines
 A brief description of each of these routines and where to find it
@@ -326,7 +323,7 @@ A brief description of each of these routines and where to find it
 |                  | them into a dictionary                            |             |
 |------------------+---------------------------------------------------+-------------|
 | PrepareDataLabel | Load analysis results and sel from Pickle file    | report.py   |
-|                  | to create an h5 file which can be supplied to     |             |
+| (New)            | to create an h5 file which can be supplied to     |             |
 |                  | the mlpipe pipeline                               |             |
 |------------------+---------------------------------------------------+-------------|
 | JesseFeatures    | Calculate the 4 features that Jesse came up with  | features.py |
