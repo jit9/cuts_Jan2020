@@ -120,8 +120,8 @@ class GetDetectors(Routine):
         # if the given list is based on matrix source
         else:
             exclude = tod.info.array_data.select_inner({
-                'row': exclude['rows'],
-                'col': exclude['cols']
+                'row': _exclude['rows'],
+                'col': _exclude['cols']
             }, mask = True, det_uid = dets)
 
         # noExclude parameter specifies if we want to remove
@@ -158,7 +158,7 @@ class GetDetectors(Routine):
             live_candidates = tod.info.array_data.select_inner({
                 'row': _live['rows'],
                 'col': _live['cols']
-            }, mask = True, det_uid = self.dets)
+            }, mask = True, det_uid = dets)
     
         # filter zero detectors
         # mark zero detectors as 1, otherwise 0 
