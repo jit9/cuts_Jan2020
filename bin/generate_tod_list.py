@@ -80,10 +80,14 @@ test_list = tod_list[n_train+n_validate:]
 
 # write list to file
 def write_to_file(outfile, lst):
-    print("Writing to %s" % outfile)
-    with open(outfile, "w") as f:
-        for l in lst:
-            f.write("%s\n" % l)
+    if len(lst) > 0:
+        print("Writing to %s" % outfile)
+        with open(outfile, "w") as f:
+            for l in lst:
+                f.write("%s\n" % l)
+    else:
+        print("list is empty, skip writing...")
+
 
 # output filenames
 outfile_train = os.path.join(output_dir, train_fname)
