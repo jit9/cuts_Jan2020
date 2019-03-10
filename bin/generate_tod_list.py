@@ -3,28 +3,62 @@
 """This script takes a pickle file and generate three lists of
 TODs corresponding to train, validate and test for developing
 machine learning pipeline.
+
+Example:
+./bin/generate_tod_list.py -t pa2_s14_c10_v4 -p ../../share/pa2/pa2_s14_c10_v4_results.pickle \
+--n_train=80 --n_validate=20 --n_test=20 -o inputs/
+
+Outputs:
+Loading pickle file: ../../share/pa2/pa2_s14_c10_v4_results.pickle
+Writing to inputs/pa2_s14_c10_v4_train.txt
+Writing to inputs/pa2_s14_c10_v4_validate.txt
+Writing to inputs/pa2_s14_c10_v4_test.txt
+Done!
+
 """
+
 import os
 import cPickle
 import random
+import argparse
+
+################################
+# parse command-line arguments #
+################################
+
+parser = argparse.ArgumentParser(description="Generate lists of TODs for machine learning")
+
+parser.add_argument("-t", "--tag", help="Tag to use to generate output lists. Example: pa2_s14_c10_v4",
+                    required=True)
+parser.add_argument("-p", "--pickle", help="Path to the pickle file", required=True)
+parser.add_argument("-o", "--output", help="Output directory to store tod lists",
+                    default="inputs")
+parser.add_argument("--n_train", help="Number of TODs for training. Default 60", type=int, default=60)
+parser.add_argument("--n_validate", help="Number of TODs for validation. Default 20", type=int, default=20)
+parser.add_argument("--n_test", help="Number of TODs for testing. Default 20", type=int, default=20)
+
+args = parser.parse_args()
 
 #########################
 # define run parameters #
 #########################
 
-pickle_file = "/mnt/act3/users/lmaurin/work/pickle_cuts/mr3_pa3_s16_results.pickle"
-output_dir = "data"
-train_fname = "mr3_pa3_s16_train.txt"
-validate_fname = "mr3_pa3_s16_validate.txt"
-test_fname = "mr3_pa3_s16_test.txt"
+tag = args.tag
 
-n_train = 60
-n_validate = 20
-n_test = 20
+pickle_file = args.pickle
+output_dir = args.output
+
+n_train = args.n_train
+n_validate = args.n_validate
+n_test = args.n_test
 
 #########
 # main  #
 #########
+
+train_fname = "%s_train.txt" % tag
+validate_fname = "%s_validate.txt" % tag
+test_fname = "%s_test.txt" % tag
 
 if not os.path.exists(output_dir):
     print("Folder %s doesn't exist, creating..." % output_dir)
