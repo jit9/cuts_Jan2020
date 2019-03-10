@@ -25,6 +25,7 @@ class CutSources(Routine):
         self._mask_params = params.get('mask_params', {})
         self._shift_params = params.get('mask_shift_generator', None)
         self._depot_path = params.get('depot', None)
+        self._write_depot = params.get('write_depot', False)
 
     def initialize(self):
         # get the depot
@@ -35,12 +36,12 @@ class CutSources(Routine):
     def execute(self, store):
         # retrieve tod
         tod = store.get(self.inputs.get('tod'))
-        
+
         # check if source cut results exist
         sourceResult = os.path.exists(
             self._depot.get_full_path(
                 moby2.TODCuts, tag=self._tag_source, tod=tod))
-        
+
         # if cuts exist, load it now
         if sourceResult:
             self.logger.info("Loading time stream cuts (%s)" % self._tag_source)
@@ -101,9 +102,10 @@ class CutSources(Routine):
             moby2.tod.fill_cuts(tod, pos_cuts_sources, no_noise=self._no_noise)
 
             # write to depot, copied from moby2, not needed here
-            # depot.write_object(pos_cuts_sources,
-            #                    tag=params.get('tag_source'),
-            #                    force=True, tod=tod, make_dirs=True)
+            if self._write_depot:
+                self._depot.write_object(pos_cuts_sources,
+                                         tag=params.get('tag_source'),
+                                         force=True, tod=tod, make_dirs=True)
 
         # pass the processed tod back to data store
         store.set(self.outputs.get('tod'), tod)
@@ -121,12 +123,13 @@ class CutPlanets(Routine):
         self._mask_params = params.get('mask_params', {})
         self._shift_params = params.get('mask_shift_generator', None)
         self._depot_path = params.get('depot', None)
+        self._write_depot = params.get('write_depot', False)
 
     def initialize(self):
         self._depot = moby2.util.Depot(self._depot_path)
         user_config = moby2.util.get_user_config()
         moby2.pointing.set_bulletin_A(params=user_config.get('bulletin_A_settings'))
-        
+
     def execute(self, store):
         tod = store.get(self.inputs.get('tod'))
 
@@ -134,7 +137,7 @@ class CutPlanets(Routine):
         planetResult = os.path.exists(
             self._depot.get_full_path(
                 moby2.TODCuts, tag=self._tag_planet, tod=tod))
-        
+
 
         # if planetCuts exist load it into variable pos_cuts_planets
         if planetResult:
@@ -182,10 +185,12 @@ class CutPlanets(Routine):
                 # merge it into the total cut
                 pos_cuts_planets.merge_tod_cuts(planet_cut)
 
+            if self._write_depot:
             # write planet cut to depot, copied from moby2, not needed
-            # here depot.write_object(pos_cuts_planets,
-            # tag=params.get('tag_planet'), force=True, tod=tod,
-            # make_dirs=True)
+            # here
+                self._depot.write_object(pos_cuts_planets,
+                                         tag=self._tag_planet, force=True, tod=tod,
+                                         make_dirs=True)
 
         # fill planet cuts into tod
         moby2.tod.fill_cuts(tod, pos_cuts_planets, no_noise=self._no_noise)
@@ -204,6 +209,7 @@ class RemoveSyncPickup(Routine):
         self._force_sync = params.get('force_sync', False)
         self._tag_sync = params.get('tag_sync', None)
         self._depot_path = params.get('depot', None)
+        self._write_depot = params.get('write_depot', False)
 
     def initialize(self):
         self._depot = moby2.util.Depot(self._depot_path)
@@ -240,8 +246,9 @@ class RemoveSyncPickup(Routine):
                 ss = ss.extend()
 
                 # write sync object to disk
-                # depot.write_object(ss, tag=self._tag_sync, tod=tod, make_dirs=True,
-                #                    force=True)
+                if self._write_depot:
+                    self._depot.write_object(ss, tag=self._tag_sync, tod=tod, make_dirs=True,
+                                             force=True)
 
             ss.removeAll()
             del ss
@@ -262,6 +269,7 @@ class CutPartial(Routine):
         self._include_mce = params.get('include_mce', True)
         self._depot_path = params.get('depot', None)
         self._no_noise = params.get('no_noise', True)
+        self._write_depot = params.get('write_depot', False)
 
     def initialize(self):
         self._depot = moby2.util.Depot(self._depot_path)
@@ -280,7 +288,7 @@ class CutPartial(Routine):
         # if we want to skip creating partial cuts, load from depot
         if skip_partial:
             # Read existing result
-            self.logger.info("Loading time stream cuts (%s)" % self._tag_partial)            
+            self.logger.info("Loading time stream cuts (%s)" % self._tag_partial)
             cuts_partial = self._depot.read_object(
                 moby2.TODCuts, tag=self._tag_partial, tod=tod)
         # otherwise generate partial cuts now
@@ -300,10 +308,11 @@ class CutPartial(Routine):
             # merge it with the partial cuts
             cuts_partial.merge_tod_cuts(mce_cuts)
 
-            # write to depot, not needed here
-            # depot.write_object(cuts_partial,
-            # tag=params.get('tag_partial'), tod=tod, make_dirs =
-            # True, force=True)
+        # write to depot, not needed here
+        if self._write_depot:
+            self._depot.write_object(cuts_partial,
+                                     tag=self._tag_partial,
+                                     tod=tod, make_dirs=True, force=True)
 
         # fill the partial cuts in our tod
         moby2.tod.fill_cuts(
@@ -374,7 +383,6 @@ class FindJumps(Routine):
             'jumpLive': jumps,
             'jumpDark': jumps,
         }
-        
+
         # save to data store
         store.set(self.outputs.get('jumps'), crit)
-    
