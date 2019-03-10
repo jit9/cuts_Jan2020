@@ -52,6 +52,10 @@ def add_cut_routines(loop):
     # add a routine to load tod
     loader_params = {
         'output_key': 'tod',
+        'load_opts': {
+            'fix_sign': True,
+            'repair_pointing': True
+        }
     }
     loop.add_routine(TODLoader(**loader_params))
 
