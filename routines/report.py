@@ -186,7 +186,7 @@ class PrepareDataLabelNew(Routine):
             data = np.vstack([tdata, fdata])
 
             # generate a unique detector id
-            det_uid = '%d.%d' % (self.get_id(), tes_det)
+            det_uid = '%s.%d' % (self.get_name(), tes_det)
 
             # test if the dataset already exists, if so update it instead
             try:
