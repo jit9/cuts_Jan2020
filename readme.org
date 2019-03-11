@@ -1,28 +1,46 @@
 * act-cutflow 
-In this project I am trying to re-organize the cuts pipeline codes in
-ACT and break them into reusable pieces. This will allow us to build
-more sophisticated pipelines on top of what's existing easily. It also
-allow us to analyze the impacts of each step applied to the pipeline 
-independently. 
-** Run the codes
+In this project I am trying to adapt the cuts pipeline codes in ACT
+(moby2) and make it easier to integrate with machine learning
+pipeline. In particular, the current cuts pipeline is broken into
+pieces which will allow us to build more sophisticated pipelines on
+top of what's existing quickly. The results of the pipeline is often a
+standalone file that summarizes all the statistics of interests and
+maybe a piece of the actual TOD or fourior transformed TOD data. This
+file can be supplied as an input to the machine learning pipeline like
+mlpipe. Note that the codes are meant to run on *Feynman* cluster. 
+
+** Dependencies
 The codes here depend on the todloop project which is basically a giant
 loop to iterate through a list of TODs. To install todloop,
 #+BEGIN_SRC sh
 pip install git+https://github.com/guanyilun/todloop
 #+END_SRC
+
+It also depends on
+- h5py (to generate summary file for machine learning pipeline)
+- inquirer (optional: used in one of the executable scripts to inspect
+  datasets)
+
+** Run the codes
 Most of the scripts in this repo contain only definition of different
 ~Routine~ (more on this later). These routines can be added to a
-pipeline that executes on a list of TODs. 
+pipeline that executes on a list of TODs.
 
-The (adapted version of) cut pipeline is defined in
-~process_cuts_feynman.py~ (for running on feynman). For example, on
-feynman,
+The adapted cuts pipelines are defined in the project root
+directory. Specifically, I am using a convention that each pipeline is
+named after the tag that the original list of TODs belongs to. For
+example, ~pa3_f90_s16_c10_v1.py~ defines the pipeline for tag
+~pa3_f90_s16_c10_v1~, to run it,
 #+BEGIN_SRC sh
-python process_cuts_feynman.py
+python pa3_f90_s16_c10_v1.py
 #+END_SRC
-This will run the cut pipeline on a list of 80 TODs with 60 TODs used
-for training, 20 TODs used for validation and 20 TODs used for
-testing.
+This will run the cut pipeline on on some predefined lists of TODs
+defined in the inputs folder, and in this case,
+#+BEGIN_EXAMPLE
+pa3_f90_s16_c10_v1_test.txt
+pa3_f90_s16_c10_v1_train.txt
+pa3_f90_s16_c10_v1_validate.txt
+#+END_EXAMPLE
 
 ** Architecture
 The basic unit in the analysis is called a ~Routine~. It represents a
@@ -223,9 +241,9 @@ and their whereabouts in this repository.
   preselection functions
 - ~routines/report.py~: routines related to reporting the results of analysis
 - ~routines/features.py~: design new features that may be useful
-- ~process_cuts_feynman~: the driver program for running the pipeline
-  on feynman, it defines the pipeline and specifies the parameters
-  inputs for each routine. 
+- ~TAGNAME.py~: the driver programs for running the pipeline on
+  feynman, it defines the pipeline and specifies the parameters inputs
+  for each routine.
 
 ** Status Quo
 Currently the pipeline consists of the following routines (example output):
