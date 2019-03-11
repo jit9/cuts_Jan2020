@@ -15,7 +15,7 @@ from routines.report import Summarize, PrepareDataLabelNew
 
 DEPOT = "/mnt/act3/users/yilun/depot"
 actpol_shared = "/mnt/act3/users/yilun/work/actpol_data_shared"
-tag = "pa2_s14_c10_v4"
+tag = "pa2_s15_c10_v4"
 
 pickle_file = "/mnt/act3/users/yilun/share/pa2/%s_results.pickle" % tag
 output_file = "outputs/%s.h5" % tag
@@ -84,14 +84,14 @@ def add_cut_routines(loop):
         'tag_planet': '%s_planet' % tag,
         'depot': DEPOT,
         'pointing_par': {'source': 'fp_file', \
-                         'filename': actpol_shared + "/RelativeOffsets/template_ar2_150201us.txt"
+                         'filename': actpol_shared + "/RelativeOffsets/template_ar2_170116us.txt"
         },
         'mask_params': {
             'radius': (8./60)  #degrees
         },
         'mask_shift_generator': {
             'source':'file',\
-            'filename':actpol_shared + '/TODOffsets/tod_offsets_2014_141104_v3.txt',
+            'filename':actpol_shared + '/TODOffsets/tod_offsets_2015_160228_v1.txt',
             'columns': [0,3,4],
             'rescale_degrees': 1./60
         },
@@ -192,7 +192,7 @@ def add_cut_routines(loop):
         'config': [{
             "type": "depot_cal",
             "depot": DEPOT,
-            "tag": "actpol2_2014_biasstep",
+            "tag": "actpol2_2015_new_biasstep",
             "name": "biasstep"
         }, {
             "type": "constant",

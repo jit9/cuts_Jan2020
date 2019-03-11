@@ -15,27 +15,27 @@ from routines.report import Summarize, PrepareDataLabelNew
 
 DEPOT = "/mnt/act3/users/yilun/depot"
 actpol_shared = "/mnt/act3/users/yilun/work/actpol_data_shared"
-tag = "pa2_s14_c10_v4"
+tag = "mr3_pa2_s16"
 
 pickle_file = "/mnt/act3/users/yilun/share/pa2/%s_results.pickle" % tag
 output_file = "outputs/%s.h5" % tag
 
-n_train = 80
 n_validate = 20
+n_test = 40
 
 #############
 # pipeline  #
 #############
 
 # initialize the pipelines
-train_loop = TODLoop()
+# train_loop = TODLoop()
 validate_loop = TODLoop()
-# test_loop = TODLoop()
+test_loop = TODLoop()
 
 # specify the list of tods to go through
-train_loop.add_tod_list("inputs/%s_train.txt" % tag)
+# train_loop.add_tod_list("inputs/%s_train.txt" % tag)
 validate_loop.add_tod_list("inputs/%s_validate.txt" % tag)
-# test_loop.add_tod_list("inputs/%s_test.txt" % tag)
+test_loop.add_tod_list("inputs/%s_test.txt" % tag)
 
 ################################
 # add routines to the pipeline #
@@ -84,14 +84,14 @@ def add_cut_routines(loop):
         'tag_planet': '%s_planet' % tag,
         'depot': DEPOT,
         'pointing_par': {'source': 'fp_file', \
-                         'filename': actpol_shared + "/RelativeOffsets/template_ar2_150201us.txt"
+                         'filename': actpol_shared + "/RelativeOffsets/template_ar2_s16_170131.txt",
         },
         'mask_params': {
             'radius': (8./60)  #degrees
         },
         'mask_shift_generator': {
             'source':'file',\
-            'filename':actpol_shared + '/TODOffsets/tod_offsets_2014_141104_v3.txt',
+            'filename':actpol_shared + '/TODOffsets/tod_offsets_2016_170131.txt',
             'columns': [0,3,4],
             'rescale_degrees': 1./60
         },
@@ -192,7 +192,7 @@ def add_cut_routines(loop):
         'config': [{
             "type": "depot_cal",
             "depot": DEPOT,
-            "tag": "actpol2_2014_biasstep",
+            "tag": "actpol2_2016_biasstep",
             "name": "biasstep"
         }, {
             "type": "constant",
@@ -365,7 +365,32 @@ def add_cut_routines(loop):
 #########
 
 # work on training data
-train_loop = add_cut_routines(train_loop)
+# train_loop = add_cut_routines(train_loop)
+
+# # save report and TOD data into an h5 file for
+# # future machine learning pipeline
+# prepare_params = {
+#     'inputs': {
+#         'tod': 'tod',
+#         'report': 'report',
+#         'dets': 'dets',
+#         'fft': 'fft_data',
+#     },
+#     'pickle_file': pickle_file,
+#     'output_file': output_file,
+#     'group': 'train',
+# }
+# train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
+
+# # run pipeline for training data
+# train_loop.run(0, n_train)
+
+############
+# validate #
+############
+
+# work on validation data
+validate_loop = add_cut_routines(validate_loop)
 
 # save report and TOD data into an h5 file for
 # future machine learning pipeline
@@ -378,25 +403,9 @@ prepare_params = {
     },
     'pickle_file': pickle_file,
     'output_file': output_file,
-    'group': 'train',
+    'group': 'validate',
 }
-train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
-# run pipeline for training data
-train_loop.run(0, n_train)
-
-############
-# validate #
-############
-
-# work on validation data
-validate_loop = add_cut_routines(validate_loop)
-
-# save report and TOD data into an h5 file for
-# future machine learning pipeline
-prepare_params.update({
-    'group': 'validate'
-})
 validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for validation data
@@ -406,16 +415,16 @@ validate_loop.run(0, n_validate)
 # test #
 ########
 
-# # work on test data
-# test_loop = add_cut_routines(test_loop)
+# work on test data
+test_loop = add_cut_routines(test_loop)
 
-# prepare_params.update({
-#     'group': 'test'
-# })
-# test_loop.add_routine(PrepareDataLabelNew(**prepare_params))
+prepare_params.update({
+    'group': 'test'
+})
+test_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
-# # run the pipeline for testdata
-# test_loop.run(0, n_test)
+# run the pipeline for testdata
+test_loop.run(0, n_test)
 
 ########
 # done #
