@@ -28,9 +28,9 @@ validate_loop = TODLoop()
 test_loop = TODLoop()
 
 # specify the list of tods to go through
-train_loop.add_tod_list("inputs/2016_ar3_train.txt")
-validate_loop.add_tod_list("inputs/2016_ar3_validate.txt")
-test_loop.add_tod_list("inputs/2016_ar3_test.txt")
+train_loop.add_tod_list("inputs/pa3_f90_s16_c10_train.txt")
+validate_loop.add_tod_list("inputs/pa3_f90_s16_c10_validate.txt")
+test_loop.add_tod_list("inputs/pa3_f90_s16_c10_test.txt")
 
 ################################
 # add routines to the pipeline #
@@ -358,7 +358,7 @@ prepare_params = {
 train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for training data
-train_loop.run(0, 60)
+train_loop.run(0, 240)
 
 ############
 # validate #
@@ -375,7 +375,7 @@ prepare_params.update({
 validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for validation data
-validate_loop.run(0, 20)
+validate_loop.run(0, 80)
 
 ########
 # test #
@@ -390,6 +390,6 @@ prepare_params.update({
 test_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run the pipeline for testdata
-test_loop.run(0, 20)
+test_loop.run(0, 80)
 
 # done!
