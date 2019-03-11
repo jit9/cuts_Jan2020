@@ -15,8 +15,13 @@ from routines.report import Summarize, PrepareDataLabelNew
 
 DEPOT = "/mnt/act3/users/lmaurin/depot"
 
-pickle_file = "/mnt/act3/users/yilun/share/pa3_f90_s16_c10_v1_results.pickle"
-output_file = "outputs/dataset.h5"
+tag = "pa3_f90_s16_c10_v1"
+pickle_file = "/mnt/act3/users/yilun/share/%s_results.pickle" % tag
+output_file = "outputs/%s.h5" % tag
+
+n_train = 240
+n_validate = 80
+n_test = 80
 
 #############
 # pipeline  #
@@ -28,9 +33,9 @@ validate_loop = TODLoop()
 test_loop = TODLoop()
 
 # specify the list of tods to go through
-train_loop.add_tod_list("inputs/pa3_f90_s16_c10_train.txt")
-validate_loop.add_tod_list("inputs/pa3_f90_s16_c10_validate.txt")
-test_loop.add_tod_list("inputs/pa3_f90_s16_c10_test.txt")
+train_loop.add_tod_list("inputs/%s_train.txt" % tag)
+validate_loop.add_tod_list("inputs/%s_validate.txt" % tag)
+test_loop.add_tod_list("inputs/%s_test.txt" % tag)
 
 ################################
 # add routines to the pipeline #
@@ -57,7 +62,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod'
         },
-        'tag_source': 'pa3_f90_s16_c10_v1_source',
+        'tag_source': '%s_source' % tag,
         'no_noise': True,
         'depot': DEPOT,
     }
@@ -71,7 +76,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_planet': 'pa3_f90_s16_c10_v1_planet',
+        'tag_planet': '%s_planet' % tag,
         'depot': DEPOT,
     }
     loop.add_routine(CutPlanets(**planets_params))
@@ -84,7 +89,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_sync': 'pa3_f90_s16_c10_v1',
+        'tag_sync': '%s' % tag,
         'remove_sync': False,
         'force_sync': False,
         'depot': DEPOT,
@@ -99,7 +104,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',        
         },
-        'tag_partial': 'pa3_f90_s16_c10_v1_partial',
+        'tag_partial': '%s_partial' % tag,
         'include_mce': True,
         'force_partial': False,
         'glitchp': { 'nSig': 10., 'tGlitch' : 0.007, 'minSeparation': 30, \
@@ -358,7 +363,7 @@ prepare_params = {
 train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for training data
-train_loop.run(0, 240)
+train_loop.run(0, n_train)
 
 ############
 # validate #
@@ -375,7 +380,7 @@ prepare_params.update({
 validate_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run pipeline for validation data
-validate_loop.run(0, 80)
+validate_loop.run(0, n_validate)
 
 ########
 # test #
@@ -390,6 +395,6 @@ prepare_params.update({
 test_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 
 # run the pipeline for testdata
-test_loop.run(0, 80)
+test_loop.run(0, n_test)
 
 # done!
