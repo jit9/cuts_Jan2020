@@ -122,7 +122,7 @@ This showcases the typical structure of a routine. One first retrieves
 the relevant data from the data store, and export the transformed data
 back to the data store after processing.
 
-The parameters are provided in a driver program (~process_cuts.py~), with
+The parameters are provided in a driver program, with
 the relevant section that looks like
 #+BEGIN_SRC python
 # add a routine to find jumps in TOD
@@ -156,7 +156,7 @@ access it. Consider another example,
 This adds a routine called ~Routine1~ in the pipeline. It demands no
 inputs and exports a ~tod~ data. This data will be stored in the
 shared data store that all routines can access, and it is associated
-with a key ~'tod-key'~. If another routine requires tod data as an 
+with a key 'tod-key'. If another routine requires tod data as an 
 input,
 #+BEGIN_SRC python
   routine2_param = {
