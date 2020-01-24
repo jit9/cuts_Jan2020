@@ -1,7 +1,7 @@
 #!/bin/env python
 
 """This script provides a command-line utility function
-to merge different h5 files. 
+to merge different h5 files.
 """
 
 import argparse
@@ -32,7 +32,7 @@ try:
 except:
     sys.exit("Error creating destination file! Exiting...")
 
-# now I trust that I can proceed 
+# now I trust that I can proceed
 files_lookup = {}
 
 print("Scanning files...")
@@ -41,8 +41,8 @@ for f in files:
     h5file = h5py.File(f, "r")
 
     # load groups
-    h5groups = h5file.keys()
-    
+    h5groups = list(h5file.keys())
+
     # save info to look-up tables
     files_lookup[f] = {
         'container': h5file,
@@ -69,7 +69,7 @@ questions = [
     inquirer.Checkbox('test',
                       message="Test set: which files do you want to include?",
                       choices=[f for f in files if 'test' in files_lookup[f]],
-    ),    
+    ),
 ]
 answers = inquirer.prompt(questions)
 
@@ -82,36 +82,36 @@ dest_file.require_group('test')
 selected_files = answers['train']
 
 for f in selected_files:
-    n_keys = len(files_lookup[f]['train'].keys())
+    n_keys = len(list(files_lookup[f]['train'].keys()))
     print("Copying %s train group (n_keys = %d) to dest file..." % (f, n_keys))
-    for k in files_lookup[f]['train'].keys():
+    for k in list(files_lookup[f]['train'].keys()):
         files_lookup[f]['container'].copy('train/%s'%k, dest_file['train'])
-print("-> Dest train: n_key = %d" % len(dest_file['train'].keys()))
+print("-> Dest train: n_key = %d" % len(list(dest_file['train'].keys())))
 
 # validate group
 selected_files = answers['validate']
 
 for f in selected_files:
-    n_keys = len(files_lookup[f]['validate'].keys())
+    n_keys = len(list(files_lookup[f]['validate'].keys()))
     print("Copying %s validate group (n_keys = %d) to dest file..." % (f, n_keys))
-    for k in files_lookup[f]['validate'].keys():
+    for k in list(files_lookup[f]['validate'].keys()):
         files_lookup[f]['container'].copy('validate/%s'%k, dest_file['validate'])
-print("-> Dest validate: n_key = %d" % len(dest_file['validate'].keys()))
+print("-> Dest validate: n_key = %d" % len(list(dest_file['validate'].keys())))
 
 # validate group
 selected_files = answers['test']
 
 for f in selected_files:
-    n_keys = len(files_lookup[f]['test'].keys())
+    n_keys = len(list(files_lookup[f]['test'].keys()))
     print("Copying %s test group (n_keys = %d) to dest file..." % (f, n_keys))
-    for k in files_lookup[f]['test'].keys():
+    for k in list(files_lookup[f]['test'].keys()):
         files_lookup[f]['container'].copy('test/%s'%k, dest_file['test'])
-print("-> Dest test: n_key = %d" % len(dest_file['test'].keys()))
+print("-> Dest test: n_key = %d" % len(list(dest_file['test'].keys())))
 
 # clean up by closing all files
 for f in files:
     files_lookup[f]['container'].close()
-    
+
 dest_file.close()
-    
+
 print("Done!")

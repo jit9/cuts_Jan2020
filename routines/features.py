@@ -7,7 +7,7 @@ import numpy as np
 from scipy.fftpack import fft
 
 from todloop import Routine
-from utils import nextregular
+from .utils import nextregular
 
 
 class JesseFeatures(Routine):

@@ -14,7 +14,7 @@ from routines.report import Summarize, PrepareDataLabelNew
 ##############
 
 DEPOT = "/mnt/act3/users/yilun/depot"
-actpol_shared = "/mnt/act3/users/yilun/work/actpol_data_shared"
+actpol_shared = "/mnt/act3/users/yilun/actpol_data_shared"
 tag = "mr3_pa2_s16"
 
 pickle_file = "/mnt/act3/users/yilun/share/pa2/%s_results.pickle" % tag
@@ -161,7 +161,7 @@ def add_cut_routines(loop):
     loop.add_routine(AnalyzeScan(**scan_params))
 
     # add a routine to get the relevant detectors to look at
-    BASE_DIR = '/mnt/act3/users/yilun/work/actpol_data_shared/ArrayData/2015/ar2/'
+    BASE_DIR = actpol_shared + '/ArrayData/2015/ar2/'
     gd_params = {
         'inputs': {
             'tod': 'tod'
@@ -367,8 +367,8 @@ def add_cut_routines(loop):
 # work on training data
 # train_loop = add_cut_routines(train_loop)
 
-# # save report and TOD data into an h5 file for
-# # future machine learning pipeline
+# save report and TOD data into an h5 file for
+# future machine learning pipeline
 # prepare_params = {
 #     'inputs': {
 #         'tod': 'tod',

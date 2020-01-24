@@ -71,7 +71,7 @@ def add_cut_routines(loop):
             'tod': 'tod'
         },
         'outputs': {
-            'tod': 'tod',        
+            'tod': 'tod',
         },
         'tag_planet': 'pa3_f90_s16_c10_v1_planet',
         'depot': DEPOT,
@@ -84,7 +84,7 @@ def add_cut_routines(loop):
             'tod': 'tod'
         },
         'outputs': {
-            'tod': 'tod',        
+            'tod': 'tod',
         },
         'tag_sync': 'pa3_f90_s16_c10_v1',
         'remove_sync': False,
@@ -99,7 +99,7 @@ def add_cut_routines(loop):
             'tod': 'tod'
         },
         'outputs': {
-            'tod': 'tod',        
+            'tod': 'tod',
         },
         'tag_partial': 'pa3_f90_s16_c10_v1_partial',
         'include_mce': True,
@@ -116,7 +116,7 @@ def add_cut_routines(loop):
             'tod': 'tod'
         },
         'outputs': {
-            'tod': 'tod',        
+            'tod': 'tod',
         },
         'remove_mean': False,
         'remove_median': True,
@@ -132,19 +132,19 @@ def add_cut_routines(loop):
             'tod': 'tod'
         },
         'outputs': {
-            'scan': 'scan_params',        
+            'scan': 'scan_params',
         }
     }
     loop.add_routine(AnalyzeScan(**scan_params))
 
     # add a routine to get the relevant detectors to look at
-    BASE_DIR = '/mnt/act3/users/yilun/share/depot/ArrayData/2016/ar3/'
+    BASE_DIR = '/mnt/act3/users/yilun/actpol_shared_depot/ArrayData/2016/ar3/'
     gd_params = {
         'inputs': {
             'tod': 'tod'
         },
         'outputs': {
-            'dets': 'dets',        
+            'dets': 'dets',
         },
         'source': 'individual',
         'live': BASE_DIR + 'live_pa3_s16_c10_v4.dict',
@@ -162,7 +162,7 @@ def add_cut_routines(loop):
         },
         'outputs': {
             'tod': 'tod',
-            'cal': 'calData' 
+            'cal': 'calData'
         },
         'flatfield': "/mnt/act3/users/mhasse/shared/actpol_shared_depot/FlatFields/2016/" + \
                      "ff_pa3_s16_c10_v5.dict",
@@ -202,7 +202,7 @@ def add_cut_routines(loop):
         'outputs': {
             'tod': 'tod',
             'fft': 'fft_data'
-        },            
+        },
     }
     loop.add_routine(FouriorTransform(**fft_params))
 
@@ -220,7 +220,7 @@ def add_cut_routines(loop):
         'cancelSync': False,
         'doubleMode': False,
         'freqRange': {
-            'fmin': 0.017,          
+            'fmin': 0.017,
             'fshift': 0.009,
             'band': 0.071,
             'Nwin': 1,
@@ -348,12 +348,12 @@ prepare_params = {
         'tod': 'tod',
         'fft': 'fft_data',
         'report': 'report',
-        'dets': 'dets',        
+        'dets': 'dets',
     },
     'pickle_file': pickle_file,
     'output_file': output_file,
     'group': 'train',
-    'remove_mean': True,    
+    'remove_mean': True,
 }
 train_loop.add_routine(PrepareDataLabelNew(**prepare_params))
 

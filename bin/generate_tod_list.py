@@ -18,7 +18,7 @@ Done!
 """
 
 import os
-import cPickle
+import pickle
 import random
 import argparse
 
@@ -67,7 +67,7 @@ if not os.path.exists(output_dir):
 # load pickle file
 print("Loading pickle file: %s" % pickle_file)
 with open(pickle_file, "r") as f:
-    data = cPickle.load(f)
+    data = pickle.load(f)
 
 # random select required number of tods
 total_tods = n_train + n_validate + n_test

@@ -4,7 +4,7 @@ import moby2
 from moby2.scripting import products
 from todloop import Routine
 
-from utils import *
+from .utils import *
 
 
 class FouriorTransform(Routine):
@@ -112,7 +112,7 @@ class GetDetectors(Routine):
 
         # look at the exclude detector list
         # if the given list is based on individual source
-        if _exclude.has_key('det_uid'):
+        if 'det_uid' in _exclude:
             exclude = tod.info.array_data.select_inner({
                 'det_uid': _exclude['det_uid']
             }, mask = True, det_uid = dets)
@@ -134,7 +134,7 @@ class GetDetectors(Routine):
 
         # look at dark detector list
         # if the list is based on individual source
-        if _dark.has_key('det_uid'):
+        if 'det_uid' in _dark:
             dark_candidates = tod.info.array_data.select_inner({
                 'det_uid': _dark['det_uid']
             }, mask = True, det_uid = dets)
@@ -148,7 +148,7 @@ class GetDetectors(Routine):
 
         # look at the live detector lists
         # if the list is based on individual source
-        if _live.has_key('det_uid'):
+        if 'det_uid' in _live:
             live_candidates = tod.info.array_data.select_inner({
                 'det_uid': _live['det_uid']
             }, mask = True, det_uid = dets)

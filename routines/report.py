@@ -1,5 +1,5 @@
 from todloop import Routine
-import cPickle, h5py, os
+import pickle, h5py, os
 import numpy as np
 import copy
 
@@ -15,15 +15,15 @@ class Summarize(Routine):
     def execute(self, store):
         # initialize an empty dictionary to store results
         results = {}
-        
+
         # retrieve all the calculated results
         for key in self.inputs.get('features'):
             results.update(store.get(key))
 
-        self.logger.info("Successfully processed: %s" % results.keys())
+        self.logger.info("Successfully processed: %s" % list(results.keys()))
         store.set(self.outputs.get('report'), results)
 
-        
+
 class PrepareDataLabel(Routine):
     def __init__(self, **params):
         """Prepare an HDF5 data set that contains all relevant metedata
@@ -36,12 +36,12 @@ class PrepareDataLabel(Routine):
         self._group_name = params.get('group', None)
         self._downsample = params.get('downsample', 1)
         self._remove_mean = params.get('remove_mean', False)
-        
+
     def initialize(self):
         # load pickle file
         self.logger.info("Loading %s..." % self._pickle_file)
-        with open(self._pickle_file, "r") as f:
-            self._pickle_data = cPickle.load(f)
+        with open(self._pickle_file, "rb") as f:
+            self._pickle_data = pickle.load(f)
 
         # create output h5 file if it doesn't exist
         if os.path.isfile(self._output_file):
@@ -52,21 +52,21 @@ class PrepareDataLabel(Routine):
             # file doesn't exist
             self.logger.info("Creating %s..." % self._output_file)
             self._hf = h5py.File(self._output_file, 'w')
-            
+
         try:
-            self.logger.info("Creating group %s..." % self._group_name)            
+            self.logger.info("Creating group %s..." % self._group_name)
             self._group = self._hf.create_group(self._group_name)
         except ValueError:
             self.logger.info("%s exists, update instead" % self._group_name)
             self._group = self._hf[self._group_name]
-        
+
     def execute(self, store):
         # retrieve tod
         tod = store.get(self.inputs.get('tod'))
 
-        # retrieve the calculated statustics 
+        # retrieve the calculated statustics
         report = store.get(self.inputs.get('report'))
-        keys = report.keys()
+        keys = list(report.keys())
 
         # remove mean if needed
         if self._remove_mean:
@@ -74,7 +74,7 @@ class PrepareDataLabel(Routine):
             self.logger.info("Remove means of the features...")
             for k in keys:
                 report[k] -= np.mean(report[k])
-        
+
         # get relevant metadata for this tod from pickle file
         tod_name = self.get_name()
         pickle_id = self._pickle_data['name'].index(tod_name)
@@ -89,7 +89,7 @@ class PrepareDataLabel(Routine):
                 data = tod.data[tes_det, ::self._downsample]
             else:
                 data = tod.data[tes_det]
-        
+
             # generate a unique detector id
             det_uid = '%d.%d' % (self.get_id(), tes_det)
 
@@ -103,15 +103,15 @@ class PrepareDataLabel(Routine):
             # save report to h5 file
             for k in keys:
                 dataset.attrs[k] = report[k][tes_det]
-                
+
             # save label
             dataset.attrs['label'] = int(self._pickle_data['sel'][tes_det, pickle_id])
 
         self.logger.info("Data saved in %s" % self._output_file)
- 
+
     def finalize(self):
         self._hf.close()
-        
+
 
 class PrepareDataLabelNew(Routine):
     def __init__(self, **params):
@@ -130,8 +130,8 @@ class PrepareDataLabelNew(Routine):
     def initialize(self):
         # load pickle file
         self.logger.info("Loading %s..." % self._pickle_file)
-        with open(self._pickle_file, "r") as f:
-            self._pickle_data = cPickle.load(f)
+        with open(self._pickle_file, "rb") as f:
+            self._pickle_data = pickle.load(f, encoding='latin1')
 
         # create output h5 file if it doesn't exist
         if os.path.isfile(self._output_file):
@@ -157,7 +157,7 @@ class PrepareDataLabelNew(Routine):
 
         # retrieve the calculated statistics
         report = store.get(self.inputs.get('report'))
-        keys = report.keys()
+        keys = list(report.keys())
 
         # remove mean if needed
         if self._remove_mean:

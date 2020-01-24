@@ -6,7 +6,7 @@ from moby2.scripting import products
 from moby2.analysis import hwp
 from todloop import Routine
 
-from utils import *
+from .utils import *
 
 
 class CutSources(Routine):

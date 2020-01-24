@@ -57,8 +57,8 @@ opened_files = []
 for f in files:
     h5file = h5py.File(f, "r")
     print("Content of %s:" % f)
-    for group in h5file.keys():
-        print("-> %s:\t %d entries" % (group, len(h5file[group].keys())))
+    for group in list(h5file.keys()):
+        print("-> %s:\t %d entries" % (group, len(list(h5file[group].keys()))))
 
     opened_files.append(h5file)
 

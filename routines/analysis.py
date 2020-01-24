@@ -8,7 +8,7 @@ import logging
 import moby2
 from todloop import Routine
 
-from utils import *
+from .utils import *
 
 
 class AnalyzeScan(Routine):
@@ -269,7 +269,7 @@ class AnalyzeDarkLF(Routine):
 
         minFreqElem = 16
         # loop over freq windows
-        for i in xrange(Nwin):
+        for i in range(Nwin):
             # find upper / lower bounds' corresponding index in freq
             # lower bound: fmin + [ fshifts ]
             # upper bound: fmin + band  + [ fshifts ]
@@ -468,7 +468,7 @@ class AnalyzeLiveLF(Routine):
             cmdt = []
             
             minFreqElem = 16
-            for i in xrange(Nwin):
+            for i in range(Nwin):
                 n_l = int(round((fmin + i*fshift)/df))
                 n_h = int(round((fmin + i*fshift + band)/df))
                                 
@@ -477,7 +477,7 @@ class AnalyzeLiveLF(Routine):
 
                 if self._removeDark:
                     if dark is None:
-                        print "ERROR: no dark selection supplied"
+                        print("ERROR: no dark selection supplied")
                         return 0
 
                     fcmi, cmi, cmdti = self.getDarkModes(fdata, dark, [n_l,n_h],
@@ -530,7 +530,7 @@ class AnalyzeLiveLF(Routine):
             crit['gainLive'][fbSel] = results["gain"][fbSel]
             crit['normLive'][fbSel] = results["norm"][fbSel]
 
-            if results.has_key('darkRatio'):
+            if 'darkRatio' in results:
                 crit["darkRatioLive"][fbSel] = results["darkRatio"][fbSel]
 
         # Undo flatfield correction
@@ -900,7 +900,7 @@ class AnalyzeHF(Routine):
                 f = float(hfd.shape[1])/nsamps
                 t = int(T*f); p = int(pivot*f)
                 prms = []; pskewt = []; pkurtt = []
-                for c in xrange(N):
+                for c in range(N):
                     # i see this as calculating the statistics for each
                     # swing (no turning part) so the statistics is not
                     # affected by the scan
