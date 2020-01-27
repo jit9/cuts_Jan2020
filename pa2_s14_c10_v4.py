@@ -13,14 +13,19 @@ from routines.report import Summarize, PrepareDataLabelNew
 # parameters #
 ##############
 
-DEPOT = "/mnt/act3/users/yilun/depot"
+### Change to a DEPOT under treu
+###DEPOT = "/mnt/act3/users/yilun/depot"
+
+
+DEPOT = "/mnt/act3/users/treu/depot2"
+
 actpol_shared = "/mnt/act3/users/yilun/work/actpol_data_shared"
 tag = "pa2_s14_c10_v4"
 
 pickle_file = "/mnt/act3/users/yilun/share/pa2/%s_results.pickle" % tag
-output_file = "outputs/%s.h5" % tag
+output_file = "outputs/%s_27Jan.h5" % tag
 
-n_train = 80
+n_train = 80 
 n_validate = 20
 
 #############
@@ -97,7 +102,8 @@ def add_cut_routines(loop):
         },
         'write_depot': True,
     }
-    loop.add_routine(CutPlanets(**planets_params))
+    ### Delete temporarilty:
+##loop.add_routine(CutPlanets(**planets_params))
 
     # add a routine to remove the sync pick up
     sync_params = {
