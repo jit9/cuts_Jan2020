@@ -41,7 +41,7 @@ class PrepareDataLabel(Routine):
         # load pickle file
         self.logger.info("Loading %s..." % self._pickle_file)
         with open(self._pickle_file, "rb") as f:
-            self._pickle_data = pickle.load(f)
+            self._pickle_data = pickle.load(f, encoding="latin1")
 
         # create output h5 file if it doesn't exist
         if os.path.isfile(self._output_file):

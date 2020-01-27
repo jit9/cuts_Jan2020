@@ -13,7 +13,9 @@ from routines.report import Summarize, PrepareDataLabelNew
 # parameters #
 ##############
 
-DEPOT = "/mnt/act3/users/yilun/depot"
+#DEPOT = "/mnt/act3/users/yilun/depot"
+DEPOT = "/mnt/act3/users/treu/depot2"
+
 actpol_shared = "/mnt/act3/users/yilun/work/actpol_data_shared"
 tag = "pa2_s15_c10_v4"
 

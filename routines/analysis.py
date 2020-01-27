@@ -1,3 +1,9 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+
+
 import numpy as np
 from numpy import ma
 import scipy.stats.mstats as ms
@@ -87,7 +93,7 @@ class AnalyzeScan(Routine):
         # length N, the last indexing is to ensure that the size of
         # the array is the same as v_scan
         v_smooth = np.convolve(v_scan,
-                               np.ones(N) / N)[(N - 1) / 2:-(N - 1) / 2]
+                               np.ones(N) / N)[(N - 1) // 2:-(N - 1)// 2]
 
         # estimate the speed using the median of the scan speeds
         speed = np.median(abs(v_smooth))
